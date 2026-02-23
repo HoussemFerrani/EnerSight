@@ -1,0 +1,89 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite3
+*.log
+
+# ML Models
+*.h5
+*.pkl
+*.joblib
+*.pth
+models/trained/*.keras
+models/trained/*.pt
+
+# Data (except sample)
+data/raw/*.csv
+data/processed/*.csv
+!data/raw/sample_data.csv
+
+# Node modules (if using Node-RED or frontend)
+node_modules/
+package-lock.json
+
+# Frontend build
+frontend/dist/
+frontend/build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Grafana
+grafana/data/
+
+# InfluxDB
+influxdb/data/
+
+# Logs
+logs/*.log
+*.log
+
+# Temporary files
+tmp/
+temp/
