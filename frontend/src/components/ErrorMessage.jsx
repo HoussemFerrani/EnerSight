@@ -1,12 +1,12 @@
-import React from 'react';
-import { Alert, AlertTitle, Button, Box, Collapse, IconButton } from '@mui/material';
 import {
   Close as CloseIcon,
   ErrorOutline as ErrorIcon,
-  WarningAmber as WarningIcon,
   InfoOutlined as InfoIcon,
   CheckCircleOutline as SuccessIcon,
+  WarningAmber as WarningIcon,
 } from '@mui/icons-material';
+import { Alert, AlertTitle, Box, Button, Collapse, IconButton } from '@mui/material';
+import React from 'react';
 
 /**
  * Enhanced error message component with better UX
@@ -98,7 +98,7 @@ const ErrorMessage = ({
       >
         {title && <AlertTitle>{title}</AlertTitle>}
         {getUserFriendlyMessage(message)}
-        
+
         {details && (
           <Box sx={{ mt: 1 }}>
             <Button

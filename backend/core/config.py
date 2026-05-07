@@ -50,14 +50,15 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(default=30, ge=1, description="Access token expiry")
     
     # CORS Configuration
-    cors_origins: list[str] = Field(
-        default=[
-            "http://localhost:3000",    # Vite default port
-            "http://localhost:3001",    # Backup port (if 3000 is occupied)
-            "http://localhost:5173"     # Vite alternative port
-        ],
-        description="Allowed CORS origins"
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://localhost:3001,http://localhost:5173",
+        description="Comma-separated CORS origins"
     )
+    
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Get CORS origins as a list"""
+        return [origin.strip() for origin in self.cors_origins.split(",")]
     
     # Database - InfluxDB
     influxdb_url: str = Field(default="http://localhost:8086", description="InfluxDB URL")

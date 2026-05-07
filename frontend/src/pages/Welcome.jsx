@@ -1,27 +1,26 @@
-import React from 'react';
 import {
-  Container,
-  Typography,
-  Button,
+  Assessment as AssessmentIcon,
+  Dashboard as DashboardIcon,
+  Notifications as NotificationsIcon,
+  Security as SecurityIcon,
+  ShowChart as ShowChartIcon,
+  Speed as SpeedIcon,
+  TrendingUp as TrendingUpIcon,
+  Warning as WarningIcon,
+} from '@mui/icons-material';
+import {
   Box,
-  Grid,
+  Button,
   Card,
-  CardContent,
   CardActions,
+  CardContent,
   Chip,
+  Container,
+  Grid,
   Paper,
+  Typography,
   useTheme,
 } from '@mui/material';
-import {
-  Dashboard as DashboardIcon,
-  ShowChart as ShowChartIcon,
-  Warning as WarningIcon,
-  Notifications as NotificationsIcon,
-  Speed as SpeedIcon,
-  Assessment as AssessmentIcon,
-  TrendingUp as TrendingUpIcon,
-  Security as SecurityIcon,
-} from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
 const Welcome = () => {

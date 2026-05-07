@@ -1,5 +1,4 @@
-import React from 'react';
-import { Skeleton, Grid, Card, CardContent, Box, Paper } from '@mui/material';
+import { Box, Card, CardContent, Grid, Paper, Skeleton } from '@mui/material';
 
 /**
  * Loading skeleton for the dashboard

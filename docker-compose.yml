@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # PostgreSQL - Relational database for user data
   postgres:

@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 import pandas as pd
 from influxdb_client import InfluxDBClient
 
-from backend.database.influx import influx_manager
+from backend.database.influxdb_client import influx_db
 from backend.schemas.analytics import (
     AggregatedData,
     AnalyticsSummary,
@@ -20,7 +20,7 @@ class AnalyticsService:
     """Service for enhanced analytics operations"""
     
     def __init__(self):
-        self.query_api = influx_manager.query_api
+        self.query_api = influx_db.query_api
         self.bucket = "energy_data"
     
     def get_data_range(

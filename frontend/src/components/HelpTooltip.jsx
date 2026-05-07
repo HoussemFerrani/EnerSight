@@ -1,6 +1,5 @@
-import React from 'react';
-import { Tooltip, IconButton, Box, Typography } from '@mui/material';
 import { Help as HelpIcon, Info as InfoIcon } from '@mui/icons-material';
+import { Box, IconButton, Tooltip, Typography } from '@mui/material';
 
 /**
  * Informational tooltip with help icon

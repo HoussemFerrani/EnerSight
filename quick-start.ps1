@@ -2,9 +2,9 @@
 # Automated setup for development environment on Windows
 
 # Colors
-function Write-Success { Write-Host "✓ $args" -ForegroundColor Green }
-function Write-Error { Write-Host "✗ $args" -ForegroundColor Red }
-function Write-Info { Write-Host "➜ $args" -ForegroundColor Yellow }
+function Write-Success { Write-Host "[SUCCESS] $args" -ForegroundColor Green }
+function Write-Error { Write-Host "[ERROR] $args" -ForegroundColor Red }
+function Write-Info { Write-Host "[INFO] $args" -ForegroundColor Yellow }
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Cyan
@@ -104,7 +104,7 @@ Write-Host "   3. Update .env file: INFLUXDB_TOKEN=<your-token>"
 Write-Host "   4. Restart backend: docker-compose restart backend"
 Write-Host "   5. Load sample data: docker-compose exec backend python backend/scripts/load_data_to_influxdb.py"
 Write-Host ""
-Write-Host "🔍 Useful Commands:" -ForegroundColor Cyan
+Write-Host "[USEFUL COMMANDS]" -ForegroundColor Cyan
 Write-Host "   View logs:    docker-compose logs -f"
 Write-Host "   Stop all:     docker-compose down"
 Write-Host "   Restart:      docker-compose restart"

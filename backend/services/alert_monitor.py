@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 
 from backend.database.postgres import SessionLocal
-from backend.database.influx import influx_manager
+from backend.database.influxdb_client import influx_db
 from backend.models.user import User
 from backend.models.alert import Alert, AlertType, AlertSeverity, AlertStatus
 from backend.services.email_service import email_service
@@ -98,7 +98,7 @@ class AlertMonitorService:
               |> sum()
             '''
             
-            tables = influx_manager.query_api.query(query)
+            tables = influx_db.query_api.query(query)
             
             if not tables or len(tables) == 0:
                 return

@@ -1,32 +1,32 @@
-import React, { useState, useEffect } from 'react';
 import {
-  Container,
-  Typography,
-  Paper,
-  Grid,
-  Card,
-  CardContent,
-  Chip,
+  Cancel as CancelIcon,
+  CheckCircle as CheckIcon,
+  Delete as DeleteIcon,
+  Error as ErrorIcon,
+  Info as InfoIcon,
+  Notifications as NotificationsIcon,
+  Warning as WarningIcon,
+} from '@mui/icons-material';
+import {
   Box,
   Button,
   ButtonGroup,
+  Card,
+  CardContent,
+  Chip,
+  Container,
   Divider,
+  Grid,
   IconButton,
+  Paper,
   Tooltip,
+  Typography,
 } from '@mui/material';
-import {
-  Notifications as NotificationsIcon,
-  CheckCircle as CheckIcon,
-  Cancel as CancelIcon,
-  Warning as WarningIcon,
-  Info as InfoIcon,
-  Error as ErrorIcon,
-  Delete as DeleteIcon,
-} from '@mui/icons-material';
-import { alertsAPI } from '../services/alertService';
-import { AlertsSkeleton } from '../components/LoadingSkeleton';
+import { useEffect, useState } from 'react';
 import { NoAlertsEmptyState } from '../components/EmptyState';
 import ErrorMessage from '../components/ErrorMessage';
+import { AlertsSkeleton } from '../components/LoadingSkeleton';
+import { alertsAPI } from '../services/alertService';
 
 const Alerts = () => {
   const [alerts, setAlerts] = useState([]);
@@ -167,200 +167,200 @@ const Alerts = () => {
         <>
           {/* Summary Cards */}
           {summary && (
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom variant="body2">
-                  Total Alerts
-                </Typography>
-                <Typography variant="h4">{summary.total_alerts}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom variant="body2">
-                  Pending
-                </Typography>
-                <Typography variant="h4" color="warning.main">
-                  {summary.pending_alerts}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom variant="body2">
-                  Critical
-                </Typography>
-                <Typography variant="h4" color="error.main">
-                  {summary.critical_alerts}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom variant="body2">
-                  Unacknowledged
-                </Typography>
-                <Typography variant="h4" color="primary.main">
-                  {summary.unacknowledged_alerts}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom variant="body2">
-                  Today
-                </Typography>
-                <Typography variant="h4">{summary.alerts_today}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-
-      {/* Filter Buttons */}
-      <Box sx={{ mb: 3 }}>
-        <ButtonGroup variant="outlined">
-          <Button
-            variant={filter === 'all' ? 'contained' : 'outlined'}
-            onClick={() => setFilter('all')}
-          >
-            All
-          </Button>
-          <Button
-            variant={filter === 'pending' ? 'contained' : 'outlined'}
-            onClick={() => setFilter('pending')}
-          >
-            Pending
-          </Button>
-          <Button
-            variant={filter === 'acknowledged' ? 'contained' : 'outlined'}
-            onClick={() => setFilter('acknowledged')}
-          >
-            Acknowledged
-          </Button>
-          <Button
-            variant={filter === 'resolved' ? 'contained' : 'outlined'}
-            onClick={() => setFilter('resolved')}
-          >
-            Resolved
-          </Button>
-        </ButtonGroup>
-      </Box>
-
-      {/* Alerts List */}
-      {alerts.length === 0 ? (
-        <NoAlertsEmptyState onRefresh={fetchAlerts} />
-      ) : (
-        <Grid container spacing={2}>
-          {alerts.map((alert) => (
-            <Grid item xs={12} key={alert.id}>
-              <Paper sx={{ p: 2 }}>
-                <Box display="flex" alignItems="flex-start">
-                  <Box sx={{ mr: 2, mt: 0.5 }}>{getSeverityIcon(alert.severity)}</Box>
-                  <Box flexGrow={1}>
-                    <Box display="flex" alignItems="center" mb={1}>
-                      <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-                        {alert.title}
-                      </Typography>
-                      <Chip
-                        label={alert.severity.toUpperCase()}
-                        color={getSeverityColor(alert.severity)}
-                        size="small"
-                        sx={{ mr: 1 }}
-                      />
-                      <Chip
-                        label={alert.status.toUpperCase()}
-                        color={getStatusColor(alert.status)}
-                        size="small"
-                      />
-                    </Box>
-
-                    <Typography variant="body1" color="textSecondary" paragraph>
-                      {alert.message}
+            <Grid container spacing={3} sx={{ mb: 4 }}>
+              <Grid item xs={12} sm={6} md={2.4}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom variant="body2">
+                      Total Alerts
                     </Typography>
+                    <Typography variant="h4">{summary.total_alerts}</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={2.4}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom variant="body2">
+                      Pending
+                    </Typography>
+                    <Typography variant="h4" color="warning.main">
+                      {summary.pending_alerts}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={2.4}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom variant="body2">
+                      Critical
+                    </Typography>
+                    <Typography variant="h4" color="error.main">
+                      {summary.critical_alerts}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={2.4}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom variant="body2">
+                      Unacknowledged
+                    </Typography>
+                    <Typography variant="h4" color="primary.main">
+                      {summary.unacknowledged_alerts}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={2.4}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom variant="body2">
+                      Today
+                    </Typography>
+                    <Typography variant="h4">{summary.alerts_today}</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          )}
 
-                    {(alert.current_value || alert.threshold_value) && (
-                      <Box sx={{ mb: 1 }}>
-                        {alert.current_value && (
-                          <Typography variant="body2">
-                            <strong>Current:</strong> {alert.current_value.toFixed(2)} kWh
+          {/* Filter Buttons */}
+          <Box sx={{ mb: 3 }}>
+            <ButtonGroup variant="outlined">
+              <Button
+                variant={filter === 'all' ? 'contained' : 'outlined'}
+                onClick={() => setFilter('all')}
+              >
+                All
+              </Button>
+              <Button
+                variant={filter === 'pending' ? 'contained' : 'outlined'}
+                onClick={() => setFilter('pending')}
+              >
+                Pending
+              </Button>
+              <Button
+                variant={filter === 'acknowledged' ? 'contained' : 'outlined'}
+                onClick={() => setFilter('acknowledged')}
+              >
+                Acknowledged
+              </Button>
+              <Button
+                variant={filter === 'resolved' ? 'contained' : 'outlined'}
+                onClick={() => setFilter('resolved')}
+              >
+                Resolved
+              </Button>
+            </ButtonGroup>
+          </Box>
+
+          {/* Alerts List */}
+          {alerts.length === 0 ? (
+            <NoAlertsEmptyState onRefresh={fetchAlerts} />
+          ) : (
+            <Grid container spacing={2}>
+              {alerts.map((alert) => (
+                <Grid item xs={12} key={alert.id}>
+                  <Paper sx={{ p: 2 }}>
+                    <Box display="flex" alignItems="flex-start">
+                      <Box sx={{ mr: 2, mt: 0.5 }}>{getSeverityIcon(alert.severity)}</Box>
+                      <Box flexGrow={1}>
+                        <Box display="flex" alignItems="center" mb={1}>
+                          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+                            {alert.title}
                           </Typography>
-                        )}
-                        {alert.threshold_value && (
-                          <Typography variant="body2">
-                            <strong>Threshold:</strong> {alert.threshold_value.toFixed(2)} kWh
-                          </Typography>
-                        )}
-                      </Box>
-                    )}
+                          <Chip
+                            label={alert.severity.toUpperCase()}
+                            color={getSeverityColor(alert.severity)}
+                            size="small"
+                            sx={{ mr: 1 }}
+                          />
+                          <Chip
+                            label={alert.status.toUpperCase()}
+                            color={getStatusColor(alert.status)}
+                            size="small"
+                          />
+                        </Box>
 
-                    <Divider sx={{ my: 1 }} />
-
-                    <Box display="flex" justifyContent="space-between" alignItems="center">
-                      <Box>
-                        <Typography variant="caption" color="textSecondary">
-                          Created: {formatDate(alert.created_at)}
+                        <Typography variant="body1" color="textSecondary" paragraph>
+                          {alert.message}
                         </Typography>
-                        {alert.acknowledged_at && (
-                          <>
-                            {' • '}
-                            <Typography variant="caption" color="textSecondary">
-                              Acknowledged: {formatDate(alert.acknowledged_at)}
-                            </Typography>
-                          </>
-                        )}
-                      </Box>
 
-                      <Box>
-                        {alert.status === 'pending' && (
-                          <Button
-                            size="small"
-                            startIcon={<CheckIcon />}
-                            onClick={() => handleAcknowledge(alert.id)}
-                            sx={{ mr: 1 }}
-                          >
-                            Acknowledge
-                          </Button>
+                        {(alert.current_value || alert.threshold_value) && (
+                          <Box sx={{ mb: 1 }}>
+                            {alert.current_value && (
+                              <Typography variant="body2">
+                                <strong>Current:</strong> {alert.current_value.toFixed(2)} kWh
+                              </Typography>
+                            )}
+                            {alert.threshold_value && (
+                              <Typography variant="body2">
+                                <strong>Threshold:</strong> {alert.threshold_value.toFixed(2)} kWh
+                              </Typography>
+                            )}
+                          </Box>
                         )}
-                        {alert.status !== 'resolved' && (
-                          <Button
-                            size="small"
-                            startIcon={<CancelIcon />}
-                            onClick={() => handleResolve(alert.id)}
-                            color="success"
-                            sx={{ mr: 1 }}
-                          >
-                            Resolve
-                          </Button>
-                        )}
-                        <Tooltip title="Delete alert">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDelete(alert.id)}
-                            color="error"
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+
+                        <Divider sx={{ my: 1 }} />
+
+                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                          <Box>
+                            <Typography variant="caption" color="textSecondary">
+                              Created: {formatDate(alert.created_at)}
+                            </Typography>
+                            {alert.acknowledged_at && (
+                              <>
+                                {' • '}
+                                <Typography variant="caption" color="textSecondary">
+                                  Acknowledged: {formatDate(alert.acknowledged_at)}
+                                </Typography>
+                              </>
+                            )}
+                          </Box>
+
+                          <Box>
+                            {alert.status === 'pending' && (
+                              <Button
+                                size="small"
+                                startIcon={<CheckIcon />}
+                                onClick={() => handleAcknowledge(alert.id)}
+                                sx={{ mr: 1 }}
+                              >
+                                Acknowledge
+                              </Button>
+                            )}
+                            {alert.status !== 'resolved' && (
+                              <Button
+                                size="small"
+                                startIcon={<CancelIcon />}
+                                onClick={() => handleResolve(alert.id)}
+                                color="success"
+                                sx={{ mr: 1 }}
+                              >
+                                Resolve
+                              </Button>
+                            )}
+                            <Tooltip title="Delete alert">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDelete(alert.id)}
+                                color="error"
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </Box>
                       </Box>
                     </Box>
-                  </Box>
-                </Box>
-              </Paper>
+                  </Paper>
+                </Grid>
+              ))}
             </Grid>
-          ))}
-        </Grid>
-      )}
+          )}
         </>
       )}
     </Container>

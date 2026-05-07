@@ -1,15 +1,11 @@
 # Multi-stage build for smaller image size
-FROM python:3.11-slim as builder
+FROM python:3.11.8-slim-bullseye as builder
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies  
+RUN apt-get update && apt-get install -y gcc g++ curl && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
 COPY requirements.txt .
@@ -18,7 +14,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Production stage
-FROM python:3.11-slim
+FROM python:3.11.8-slim-bullseye
 
 # Set working directory
 WORKDIR /app

@@ -1,10 +1,10 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
-import { ThemeProvider as MuiThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { ThemeProvider as MuiThemeProvider, createTheme } from '@mui/material/styles';
+import { createContext, useContext, useMemo, useState } from 'react';
 
 const ThemeContext = createContext({
   mode: 'light',
-  toggleTheme: () => {},
+  toggleTheme: () => { },
 });
 
 export const useThemeMode = () => useContext(ThemeContext);

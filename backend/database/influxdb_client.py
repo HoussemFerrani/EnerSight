@@ -18,6 +18,13 @@ class InfluxDBConnection:
         self.org = os.getenv("INFLUXDB_ORG", "enersight")
         self.bucket = os.getenv("INFLUXDB_BUCKET", "energy_data")
         self.client = None
+    
+    @property
+    def query_api(self):
+        """Get query API, connecting if necessary"""
+        if not self.client:
+            self.connect()
+        return self.client.query_api() if self.client else None
         
     def connect(self):
         """Establish connection to InfluxDB"""

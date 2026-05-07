@@ -1,53 +1,46 @@
-import React, { useState, useEffect } from 'react';
 import {
-  Container,
-  Typography,
-  Paper,
-  Grid,
-  Card,
-  CardContent,
-  Box,
-  Button,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  CircularProgress,
-  Alert as MuiAlert,
-  Chip,
-  Divider,
-  IconButton,
-  Tooltip,
-} from '@mui/material';
-import {
-  Download as DownloadIcon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  AttachMoney as MoneyIcon,
-  DateRange as DateRangeIcon,
   Compare as CompareIcon,
+  DateRange as DateRangeIcon,
+  Download as DownloadIcon,
+  AttachMoney as MoneyIcon,
+  TrendingDown as TrendingDownIcon,
+  TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Container,
+  Divider,
+  FormControl,
+  Grid,
+  InputLabel,
+  MenuItem,
+  Alert as MuiAlert,
+  Paper,
+  Select,
+  TextField,
+  Typography
+} from '@mui/material';
+import { useEffect, useState } from 'react';
+import {
+  Area,
+  AreaChart,
   CartesianGrid,
   Tooltip as RechartsTooltip,
-  Legend,
   ResponsiveContainer,
-  AreaChart,
-  Area,
+  XAxis,
+  YAxis
 } from 'recharts';
 import { analyticsAPI } from '../services/analyticsService';
 
 const AnalyticsEnhanced = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+
   // Date range state
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
@@ -55,14 +48,14 @@ const AnalyticsEnhanced = () => {
     return date.toISOString().slice(0, 16);
   });
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 16));
-  
+
   // Data state
   const [summary, setSummary] = useState(null);
   const [quickStats, setQuickStats] = useState(null);
   const [trends, setTrends] = useState(null);
   const [comparison, setComparison] = useState(null);
   const [costData, setCostData] = useState(null);
-  
+
   // Settings
   const [aggregation, setAggregation] = useState('day');
   const [costPerKwh, setCostPerKwh] = useState(0.12);
@@ -268,7 +261,7 @@ const AnalyticsEnhanced = () => {
                   This Week
                 </Typography>
                 <Typography variant="h4">{quickStats.this_week.total.toFixed(1)} kWh</Typography>
-                <Typography variant ="body2" color="textSecondary">
+                <Typography variant="body2" color="textSecondary">
                   Avg: {quickStats.this_week.average.toFixed(1)} kWh/day
                 </Typography>
               </CardContent>
@@ -309,7 +302,7 @@ const AnalyticsEnhanced = () => {
           <Typography variant="h6" gutterBottom>
             Period Summary
           </Typography>
-          <Divider sx={{ mb: 2 }}/>
+          <Divider sx={{ mb: 2 }} />
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6} md={4}>
               <Box>

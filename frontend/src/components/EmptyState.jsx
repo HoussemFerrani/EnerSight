@@ -1,13 +1,12 @@
-import React from 'react';
-import { Box, Typography, Button, Paper } from '@mui/material';
 import {
-  Inbox as InboxIcon,
-  DataUsage as DataIcon,
-  Warning as WarningIcon,
-  CloudOff as CloudOffIcon,
-  BatteryAlert as BatteryAlertIcon,
   Assessment as AssessmentIcon,
+  BatteryAlert as BatteryAlertIcon,
+  CloudOff as CloudOffIcon,
+  DataUsage as DataIcon,
+  Inbox as InboxIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
+import { Box, Button, Paper, Typography } from '@mui/material';
 
 /**
  * Generic empty state component

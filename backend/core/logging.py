@@ -8,7 +8,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from pythonjsonlogger.json import JsonFormatter
+try:
+    from pythonjsonlogger.jsonlogger import JsonFormatter
+except ImportError:
+    # Fallback for older versions
+    from pythonjsonlogger import jsonlogger
+    JsonFormatter = jsonlogger.JsonFormatter
 
 
 class CustomJsonFormatter(JsonFormatter):

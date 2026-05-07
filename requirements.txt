@@ -38,6 +38,7 @@ plotly==5.18.0
 # API & HTTP
 httpx==0.26.0
 requests==2.31.0
+aiohttp==3.9.3
 
 # Utilities
 python-json-logger==2.0.7

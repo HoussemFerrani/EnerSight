@@ -1,14 +1,14 @@
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
 import TrendingDownIcon from '@mui/icons-material/TrendingDown'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
-import { Alert, Box, Chip, Container, Grid, Paper, Typography, Tooltip } from '@mui/material'
+import { Alert, Box, Chip, Container, Grid, Paper, Tooltip, Typography } from '@mui/material'
 import { useEffect, useState } from 'react'
-import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import ErrorMessage from '../components/ErrorMessage'
+import { DashboardSkeleton } from '../components/LoadingSkeleton'
 import { useMockLiveData } from '../hooks/useMockLiveData'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { energyAPI, systemAPI } from '../services/api'
-import { DashboardSkeleton } from '../components/LoadingSkeleton'
-import ErrorMessage from '../components/ErrorMessage'
 
 function Dashboard() {
   const [statistics, setStatistics] = useState(null)
