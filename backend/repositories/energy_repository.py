@@ -1,269 +1,217 @@
 """
-Energy Data Repository
-Concrete implementation for energy consumption data access
+Energy data repository backed by Supabase Postgres.
+
+Replaces the previous InfluxDB implementation. The public method signatures
+are preserved so callers (services, routes) keep working unchanged. Aggregation
+windows are expressed as Postgres `interval`/`date_trunc` rather than Flux.
 """
-
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
-from influxdb_client.client.write.point import Point
-from influxdb_client.client.write_api_async import WriteApiAsync
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.repositories.base import TimeSeriesRepository
-from backend.core.logging import get_logger
 from backend.core.exceptions import DatabaseQueryError
+from backend.core.logging import get_logger
+from backend.models.energy import EnergyReading
 
 logger = get_logger(__name__)
 
 
-class EnergyDataRepository(TimeSeriesRepository):
+# Map InfluxDB-style window strings ("1h", "1d", "5m") to a Postgres date_trunc unit.
+_WINDOW_TO_TRUNC = {
+    "m": "minute",
+    "h": "hour",
+    "d": "day",
+    "w": "week",
+}
+
+
+def _parse_window(window: str) -> str:
+    """Return a date_trunc unit name (e.g. 'hour') from an Influx-style window."""
+    if not window:
+        return "hour"
+    unit = window[-1].lower()
+    return _WINDOW_TO_TRUNC.get(unit, "hour")
+
+
+class EnergyDataRepository:
     """
-    Repository for energy consumption time-series data
-    Implements data access layer for InfluxDB
+    Repository for energy consumption time-series data on Postgres.
+
+    Field semantics match the InfluxDB measurement "energy_consumption":
+    - tags  -> indexed columns (device_id, location)
+    - fields -> data columns (consumption, temperature, humidity, ...)
     """
-    
-    def __init__(self, influxdb_client: InfluxDBClientAsync, bucket: str, org: str):
-        """
-        Initialize energy data repository
-        
-        Args:
-            influxdb_client: InfluxDB async client
-            bucket: InfluxDB bucket for energy data
-            org: InfluxDB organization
-        """
-        super().__init__(influxdb_client, bucket, org)
-        self.measurement_name = "energy_consumption"
-    
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    # ------------------------------------------------------------------
+    # Writes
+    # ------------------------------------------------------------------
     async def write_measurement(
         self,
         measurement: str,
         tags: dict,
         fields: dict,
-        timestamp: datetime
+        timestamp: datetime,
     ) -> None:
-        """
-        Write energy measurement to InfluxDB
-        
-        Args:
-            measurement: Measurement name (default: "energy_consumption")
-            tags: Tags (e.g., {"device_id": "sensor_1", "location": "lab"})
-            fields: Fields (e.g., {"temperature": 22.5, "consumption": 1250.3})
-            timestamp: Measurement timestamp
-        """
+        """Insert a single energy reading."""
         try:
-            write_api: WriteApiAsync = self.client.write_api()
-            
-            point = Point(measurement) \
-                .time(timestamp)
-            
-            # Add tags
-            for tag_key, tag_value in tags.items():
-                point = point.tag(tag_key, tag_value)
-            
-            # Add fields
-            for field_key, field_value in fields.items():
-                point = point.field(field_key, field_value)
-            
-            await write_api.write(bucket=self.bucket, org=self.org, record=point)
-            
-            logger.debug(f"Wrote measurement: {measurement} at {timestamp}")
-        
+            row = EnergyReading(
+                recorded_at=timestamp,
+                device_id=tags.get("device_id", "device_0"),
+                location=tags.get("location", "default"),
+                consumption=float(fields.get("consumption", 0.0)),
+                temperature=fields.get("temperature"),
+                humidity=fields.get("humidity"),
+                square_footage=fields.get("square_footage"),
+                occupancy=fields.get("occupancy"),
+                hvac_usage=bool(fields["hvac_usage"]) if "hvac_usage" in fields else None,
+                lighting_usage=bool(fields["lighting_usage"]) if "lighting_usage" in fields else None,
+                renewable_energy=fields.get("renewable_energy"),
+                day_of_week=fields.get("day_of_week"),
+                holiday=bool(fields["holiday"]) if "holiday" in fields else None,
+            )
+            self.session.add(row)
+            await self.session.flush()
         except Exception as e:
-            logger.error(f"Failed to write measurement: {e}")
-            raise DatabaseQueryError(f"Failed to write to InfluxDB: {str(e)}")
-    
+            logger.error(f"Failed to write reading: {e}")
+            raise DatabaseQueryError(f"Failed to write energy reading: {e}")
+
     async def write_batch(self, data_points: List[Dict[str, Any]]) -> None:
-        """
-        Write multiple energy measurements in batch
-        
-        Args:
-            data_points: List of data points, each containing:
-                - tags: Dict of tags
-                - fields: Dict of fields
-                - timestamp: Datetime
-        """
+        """Bulk-insert energy readings. Each point: {tags, fields, timestamp}."""
         try:
-            write_api: WriteApiAsync = self.client.write_api()
-            
-            points = []
-            for data in data_points:
-                point = Point(self.measurement_name) \
-                    .time(data["timestamp"])
-                
-                for tag_key, tag_value in data.get("tags", {}).items():
-                    point = point.tag(tag_key, tag_value)
-                
-                for field_key, field_value in data.get("fields", {}).items():
-                    point = point.field(field_key, field_value)
-                
-                points.append(point)
-            
-            await write_api.write(bucket=self.bucket, org=self.org, record=points)
-            
-            logger.info(f"Wrote {len(points)} measurements in batch")
-        
+            rows = []
+            for p in data_points:
+                tags = p.get("tags", {})
+                fields = p.get("fields", {})
+                rows.append(
+                    EnergyReading(
+                        recorded_at=p["timestamp"],
+                        device_id=tags.get("device_id", "device_0"),
+                        location=tags.get("location", "default"),
+                        consumption=float(fields.get("consumption", 0.0)),
+                        temperature=fields.get("temperature"),
+                        humidity=fields.get("humidity"),
+                        square_footage=fields.get("square_footage"),
+                        occupancy=fields.get("occupancy"),
+                        hvac_usage=bool(fields["hvac_usage"]) if "hvac_usage" in fields else None,
+                        lighting_usage=bool(fields["lighting_usage"]) if "lighting_usage" in fields else None,
+                        renewable_energy=fields.get("renewable_energy"),
+                        day_of_week=fields.get("day_of_week"),
+                        holiday=bool(fields["holiday"]) if "holiday" in fields else None,
+                    )
+                )
+            self.session.add_all(rows)
+            await self.session.flush()
+            logger.info(f"Wrote {len(rows)} readings in batch")
         except Exception as e:
             logger.error(f"Failed to write batch: {e}")
-            raise DatabaseQueryError(f"Failed to write batch to InfluxDB: {str(e)}")
-    
+            raise DatabaseQueryError(f"Failed to batch-write energy readings: {e}")
+
+    # ------------------------------------------------------------------
+    # Reads
+    # ------------------------------------------------------------------
     async def query_range(
         self,
         measurement: str,
         start: datetime,
         stop: datetime,
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
     ) -> List[dict]:
-        """
-        Query energy data within time range
-        
-        Args:
-            measurement: Measurement name
-            start: Start timestamp
-            stop: Stop timestamp
-            filters: Optional tag filters (e.g., {"device_id": "sensor_1"})
-        
-        Returns:
-            List of data points with timestamp and field values
-        """
+        """Return readings between `start` and `stop` matching optional tag filters."""
         try:
-            query_api = self.client.query_api()
-            
-            # Build Flux query
-            flux_query = f'''
-                from(bucket: "{self.bucket}")
-                    |> range(start: {start.isoformat()}Z, stop: {stop.isoformat()}Z)
-                    |> filter(fn: (r) => r["_measurement"] == "{measurement}")
-            '''
-            
-            # Add tag filters
+            query = select(EnergyReading).where(
+                EnergyReading.recorded_at >= start,
+                EnergyReading.recorded_at < stop,
+            )
             if filters:
-                for tag_key, tag_value in filters.items():
-                    flux_query += f'\n    |> filter(fn: (r) => r["{tag_key}"] == "{tag_value}")'
-            
-            # Execute query
-            tables = await query_api.query(flux_query, org=self.org)
-            
-            # Parse results
-            results = []
-            for table in tables:
-                for record in table.records:
-                    results.append({
-                        "time": record.get_time(),
-                        "field": record.get_field(),
-                        "value": record.get_value(),
-                        **{k: v for k, v in record.values.items() if k not in ["_time", "_field", "_value"]}
-                    })
-            
-            logger.debug(f"Query returned {len(results)} records")
-            return results
-        
+                for key, value in filters.items():
+                    if hasattr(EnergyReading, key):
+                        query = query.where(getattr(EnergyReading, key) == value)
+            query = query.order_by(EnergyReading.recorded_at.asc())
+            result = await self.session.execute(query)
+            rows = result.scalars().all()
+            return [
+                {
+                    "time": r.recorded_at,
+                    "consumption": r.consumption,
+                    "temperature": r.temperature,
+                    "humidity": r.humidity,
+                    "occupancy": r.occupancy,
+                    "hvac_usage": r.hvac_usage,
+                    "lighting_usage": r.lighting_usage,
+                    "renewable_energy": r.renewable_energy,
+                    "square_footage": r.square_footage,
+                    "day_of_week": r.day_of_week,
+                    "holiday": r.holiday,
+                    "device_id": r.device_id,
+                    "location": r.location,
+                }
+                for r in rows
+            ]
         except Exception as e:
             logger.error(f"Query failed: {e}")
-            raise DatabaseQueryError(f"Failed to query InfluxDB: {str(e)}")
-    
+            raise DatabaseQueryError(f"Failed to query energy readings: {e}")
+
     async def aggregate(
         self,
         measurement: str,
         start: datetime,
         stop: datetime,
         aggregation: str = "mean",
-        window: str = "1h"
+        window: str = "1h",
     ) -> List[dict]:
         """
-        Aggregate energy data over time windows
-        
-        Args:
-            measurement: Measurement name
-            start: Start timestamp
-            stop: Stop timestamp
-            aggregation: Aggregation function (mean, sum, max, min, median)
-            window: Time window (e.g., "1h", "1d", "5m")
-        
-        Returns:
-            List of aggregated data points
+        Bucket readings by `window` and reduce with `aggregation`.
+        Returns one row per bucket with averaged/summed consumption.
         """
+        agg_map = {
+            "mean": func.avg,
+            "avg": func.avg,
+            "sum": func.sum,
+            "max": func.max,
+            "min": func.min,
+            "count": func.count,
+        }
+        agg_func = agg_map.get(aggregation, func.avg)
+        trunc_unit = _parse_window(window)
+
         try:
-            query_api = self.client.query_api()
-            
-            # Map aggregation to Flux function
-            agg_functions = {
-                "mean": "mean",
-                "sum": "sum",
-                "max": "max",
-                "min": "min",
-                "median": "median",
-                "count": "count",
-            }
-            
-            agg_func = agg_functions.get(aggregation, "mean")
-            
-            # Build Flux query with aggregation
-            flux_query = f'''
-                from(bucket: "{self.bucket}")
-                    |> range(start: {start.isoformat()}Z, stop: {stop.isoformat()}Z)
-                    |> filter(fn: (r) => r["_measurement"] == "{measurement}")
-                    |> aggregateWindow(every: {window}, fn: {agg_func}, createEmpty: false)
-                    |> yield(name: "{aggregation}")
-            '''
-            
-            # Execute query
-            tables = await query_api.query(flux_query, org=self.org)
-            
-            # Parse results
-            results = []
-            for table in tables:
-                for record in table.records:
-                    results.append({
-                        "time": record.get_time(),
-                        "field": record.get_field(),
-                        "value": record.get_value(),
-                        "aggregation": aggregation,
-                        "window": window,
-                    })
-            
-            logger.debug(f"Aggregation returned {len(results)} windows")
-            return results
-        
+            bucket = func.date_trunc(trunc_unit, EnergyReading.recorded_at).label("bucket")
+            stmt = (
+                select(bucket, agg_func(EnergyReading.consumption).label("value"))
+                .where(EnergyReading.recorded_at >= start, EnergyReading.recorded_at < stop)
+                .group_by(bucket)
+                .order_by(bucket.asc())
+            )
+            result = await self.session.execute(stmt)
+            rows = result.all()
+            return [
+                {
+                    "time": row.bucket,
+                    "value": float(row.value) if row.value is not None else None,
+                    "aggregation": aggregation,
+                    "window": window,
+                }
+                for row in rows
+            ]
         except Exception as e:
             logger.error(f"Aggregation failed: {e}")
-            raise DatabaseQueryError(f"Failed to aggregate data: {str(e)}")
-    
+            raise DatabaseQueryError(f"Failed to aggregate energy readings: {e}")
+
     async def get_latest(self, measurement: str, limit: int = 10) -> List[dict]:
-        """
-        Get latest N measurements
-        
-        Args:
-            measurement: Measurement name
-            limit: Number of latest records to return
-        
-        Returns:
-            List of latest data points
-        """
+        """Return the latest `limit` readings, newest first."""
         try:
-            query_api = self.client.query_api()
-            
-            flux_query = f'''
-                from(bucket: "{self.bucket}")
-                    |> range(start: -7d)
-                    |> filter(fn: (r) => r["_measurement"] == "{measurement}")
-                    |> sort(columns: ["_time"], desc: true)
-                    |> limit(n: {limit})
-            '''
-            
-            tables = await query_api.query(flux_query, org=self.org)
-            
-            results = []
-            for table in tables:
-                for record in table.records:
-                    results.append({
-                        "time": record.get_time(),
-                        "field": record.get_field(),
-                        "value": record.get_value(),
-                    })
-            
-            return results
-        
+            stmt = (
+                select(EnergyReading)
+                .order_by(EnergyReading.recorded_at.desc())
+                .limit(limit)
+            )
+            result = await self.session.execute(stmt)
+            return [r.to_dict() for r in result.scalars().all()]
         except Exception as e:
-            logger.error(f"Failed to get latest measurements: {e}")
-            raise DatabaseQueryError(f"Failed to get latest data: {str(e)}")
+            logger.error(f"Failed to get latest readings: {e}")
+            raise DatabaseQueryError(f"Failed to read latest energy readings: {e}")

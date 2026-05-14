@@ -1,435 +1,194 @@
 # EnerSight - Smart Energy Management and Monitoring Platform
 
-An IoT-based platform for real-time energy monitoring, predictive analytics, and optimization.
+An IoT-style platform for real-time energy monitoring, predictive analytics, and anomaly detection.
 
-![Status](https://img.shields.io/badge/status-production--ready-green)
+![Status](https://img.shields.io/badge/status-active-green)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109-green)
 ![React](https://img.shields.io/badge/React-18.2-blue)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres-3ECF8E)
 
-## 🎯 Project Overview
+## Overview
 
-EnerSight monitors, analyzes, and optimizes energy consumption in buildings using IoT sensors, machine learning, and real-time analytics. The platform provides real-time dashboards, predictive models, and automated anomaly detection to help reduce energy costs and improve efficiency.
+EnerSight monitors, analyzes, and optimizes building energy consumption using IoT sensor data, machine learning, and real-time analytics. Backed by Supabase (Postgres + Auth) and a FastAPI + React stack.
 
-## ✨ Features
+## Features
 
-### Core Functionality
-- 📊 **Real-time Monitoring** - Live energy consumption tracking with sub-second updates
-- 🤖 **ML Predictions** - Multiple trained models (Random Forest, LSTM, Gradient Boosting)
-- 🔍 **Anomaly Detection** - Automated identification of unusual consumption patterns
-- 📈 **Interactive Dashboards** - Beautiful, responsive data visualizations
-- 🔌 **REST API** - 9 endpoints for complete data access and control
-- 🔄 **Time-Series Storage** - Efficient InfluxDB integration for historical data
+- **Real-time monitoring** — live energy consumption tracking
+- **ML predictions** — Random Forest, Gradient Boosting, and LSTM
+- **Anomaly detection** — Isolation Forest with explanations
+- **Interactive dashboards** — Recharts + Chart.js visualizations
+- **Authentication** — Supabase Auth (email/password, JWT)
+- **Alerts** — threshold breaches surface as per-user alerts
 
-### Machine Learning Models
-- **Random Forest Regressor** - Primary prediction model (R² > 0.95)
-- **Gradient Boosting** - Alternative regression approach
-- **LSTM Neural Network** - Sequential pattern recognition
-- **Isolation Forest** - Anomaly detection (precision > 90%)
-
-### Frontend Pages
-- **Dashboard** - Overview with statistics and key metrics
-- **Predictions** - Interactive ML model testing
-- **Anomalies** - Detection results and alerts
-- **Real-time** - Live data streaming
-- **Analytics** - Advanced data analysis and trends
-
-## 🛠️ Tech Stack
+## Tech Stack
 
 **Backend**
 - Python 3.11
-- FastAPI 0.109 - Modern async API framework
-- Scikit-learn - ML model training
-- TensorFlow/Keras - Deep learning (LSTM)
-- Pandas & NumPy - Data processing
-- InfluxDB - Time-series database
-- Docker - Containerization
+- FastAPI 0.109
+- SQLAlchemy 2.0 (sync + async)
+- PyJWT (Supabase ES256 JWT verification via JWKS)
+- supabase-py (auth admin)
+- scikit-learn / TensorFlow / Keras
 
 **Frontend**
-- React 18.2 with TypeScript
-- Vite - Build tool and dev server
-- Recharts - Data visualization
-- Tailwind CSS - Styling
-- Axios - HTTP client
+- React 18 + Vite
+- @supabase/supabase-js
+- Material UI, Recharts, Chart.js, Axios
 
-**Infrastructure**
-- Docker & Docker Compose
-- Nginx - Reverse proxy
-- InfluxDB 2.x - Time-series storage
+**Data**
+- Supabase Postgres (auth, profiles, alerts, energy time-series, anomalies, predictions)
+- Supabase Auth (replaces the previous custom JWT)
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 EnerSight/
-├── backend/                 # FastAPI application
-│   ├── api/                # API routes and endpoints
-│   ├── core/               # Configuration and dependencies
-│   ├── ml/                 # ML model integration
+├── backend/                # FastAPI application
+│   ├── api/                # REST + WebSocket routes
+│   ├── core/               # Config, DI, logging, errors
+│   ├── database/           # Supabase Postgres engine
+│   ├── models/             # SQLAlchemy ORM models
 │   ├── repositories/       # Data access layer
+│   ├── schemas/            # Pydantic schemas
 │   ├── services/           # Business logic
-│   ├── scripts/            # Utility scripts
-│   └── Dockerfile          # Backend container image
-├── frontend/               # React application
+│   ├── scripts/            # Data loader
+│   └── utils/              # JWT verification, helpers
+├── frontend/               # React + Vite app
 │   ├── src/
-│   │   ├── components/    # Reusable UI components
-│   │   ├── pages/         # Application pages
-│   │   └── services/      # API integration
-│   ├── nginx.conf         # Nginx configuration
-│   └── Dockerfile         # Frontend container image
-├── ml/                     # ML models and training
-│   ├── models/            # Saved model files
-│   └── notebooks/         # Jupyter notebooks
-├── data/                   # Data storage
-│   ├── raw/               # Original datasets
-│   └── processed/         # Processed data
-├── docker-compose.yml      # Multi-container orchestration
-├── DEPLOYMENT.md          # Complete deployment guide
-└── README.md              # This file
+│   │   ├── components/     # Shared UI
+│   │   ├── pages/          # Dashboard, Analytics, Alerts, etc.
+│   │   └── services/       # supabaseClient, api, alertService, ...
+├── ml/                     # ML models
+│   ├── models/             # Regression / LSTM / Anomaly classes
+│   └── training/           # Training pipelines
+├── data/raw/               # Source CSV(s) (ignored by git)
+├── render.yaml             # Render deployment (backend only)
+├── start.ps1               # One-shot local launcher (Windows)
+└── requirements.txt
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
-- Docker Desktop 20.10+ (or Docker Engine + Docker Compose)
-- 4GB RAM minimum (8GB recommended)
-- 10GB disk space
+- Python 3.11
+- Node.js 20+
+- A Supabase project — get one at https://supabase.com/dashboard
 
-### One-Command Setup (Recommended)
+### 1. Set up Supabase
+1. Create a project.
+2. Open the SQL editor and run the migration from your local Supabase MCP, or apply the schema documented in `DEPLOYMENT.md`.
+3. From **Project Settings → API**, copy:
+   - Project URL
+   - `anon` / publishable key
+   - `service_role` key
+4. From **Project Settings → Database → Connection string (Transaction pooler, port 6543)**, copy the URI and replace `[YOUR-PASSWORD]` with your database password.
 
-**Windows:**
+### 2. Configure environment
 ```powershell
-.\quick-start.ps1
+cp .env.development .env
+# Edit .env and fill in:
+#   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL
+# Plus (for the frontend, in frontend/.env.local):
+#   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 ```
 
-**Linux/macOS:**
-```bash
-chmod +x quick-start.sh
-./quick-start.sh
+### 3. Install dependencies
+```powershell
+# Backend
+python -m venv venv
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+
+# Frontend
+npm --prefix frontend install
 ```
 
-This script will:
-- ✓ Check Docker installation
-- ✓ Create .env from template
-- ✓ Create required directories
-- ✓ Pull and build Docker images
-- ✓ Start all services
-- ✓ Wait for health checks
-- ✓ Display access URLs
-
-### Manual Docker Setup
-
-```bash
-# 1. Clone the repository
-git clone <your-repo-url>
-cd EnerSight
-
-# 2. Configure environment
-cp .env.example .env
-# Edit .env with your settings (see Configuration section)
-
-# 3. Start all services
-docker compose up -d
-
-# 4. Check service status
-docker compose ps
-
-# 5. View logs
-docker compose logs -f
-
-# 6. Access the application
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8000/docs
-# InfluxDB UI: http://localhost:8086
+### 4. Load sample data
+Drop your CSV at `data/raw/Energy_consumption.csv`, then:
+```powershell
+.\venv\Scripts\python.exe -m backend.scripts.load_data_to_supabase
 ```
 
-**Default Login:**
-- Username: `johndoe`
-- Password: `SecurePass123!`
+### 5. Create a test user
+Either via Supabase Dashboard → Authentication → Add user, or via the admin API. The `handle_new_user` trigger auto-creates a row in `public.profiles`.
 
-### Production Deployment
-
-```bash
-# Use production configuration with Redis, resource limits, and optimizations
-docker compose -f docker-compose.prod.yml up -d
+### 6. Run
+```powershell
+.\start.ps1
 ```
+This launches:
+- Backend: http://localhost:8000 (docs at `/api/docs`)
+- Frontend: http://localhost:3000
 
-📖 **For detailed Docker documentation**, see **[DOCKER.md](DOCKER.md)**
-   docker-compose restart backend
-   ```
+## API Endpoints
 
-3. **Load Sample Data**
-   ```bash
-   docker-compose exec backend python backend/scripts/load_data_to_influxdb.py
-   ```
-
-## 📖 Documentation
-
-- **[DOCKER.md](DOCKER.md)** - Complete Docker deployment guide
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Production deployment guide
-- **[OPTION6_DEMO_POLISH.md](OPTION6_DEMO_POLISH.md)** - UI/UX improvements
-- **[API Documentation](http://localhost:8000/docs)** - Interactive API docs (when running)
-
-## 🔌 API Endpoints
-
-### Energy Management
-- `GET /api/v1/energy/statistics` - Consumption statistics
-- `GET /api/v1/energy/readings` - Historical readings
-- `POST /api/v1/energy/readings` - Submit new reading
+### Energy
+- `GET /api/v1/energy/statistics` — period statistics
+- `GET /api/v1/energy/readings` — raw/aggregated readings
+- `POST /api/v1/energy/readings` — submit a reading
 
 ### Predictions
-- `POST /api/v1/predictions/predict` - Get consumption prediction
-- `POST /api/v1/predictions/batch` - Batch predictions
+- `POST /api/v1/predictions/predict` — single prediction
+- `POST /api/v1/predictions/forecast` — forecast horizon
 
 ### Anomalies
-- `GET /api/v1/anomalies/detect` - Run anomaly detection
-- `GET /api/v1/anomalies` - List detected anomalies
+- `GET /api/v1/anomalies/detect` — run detection
+- `GET /api/v1/anomalies/history` — recent results
+
+### Alerts
+- `GET /api/v1/alerts/` — list current user's alerts
+- `POST /api/v1/alerts/{id}/acknowledge` — acknowledge an alert
+
+### Auth
+- `GET /api/v1/auth/me` — current user's profile
+- `GET /api/v1/auth/verify` — verify token validity
 
 ### System
-- `GET /health` - System health check
-- `GET /` - API information
+- `GET /health` — service health
+- `GET /api/v1/info` — API capabilities
 
-## 📊 Dataset
+## Dataset
 
-The platform processes energy consumption data with the following features:
-- **Environmental**: Temperature, Humidity
-- **Building**: Square Footage, Occupancy
-- **Systems**: HVAC Usage, Lighting Usage
-- **Metrics**: Energy Consumption (kWh), Renewable Energy
-- **Temporal**: Timestamp, Day of Week, Holiday
+CSV columns expected by [load_data_to_supabase.py](backend/scripts/load_data_to_supabase.py):
+- `Timestamp`, `EnergyConsumption`, `Temperature`, `Humidity`
+- `SquareFootage`, `Occupancy`, `HVACUsage`, `LightingUsage`
+- `RenewableEnergy`, `DayOfWeek`, `Holiday`
 
-Sample dataset: 1000+ records with hourly granularity
+## Authentication
 
-## 🔐 Security
+The backend verifies Supabase access tokens using **ES256** asymmetric signatures, fetching the public key from the project's JWKS endpoint (`/auth/v1/.well-known/jwks.json`). The frontend uses `@supabase/supabase-js` for sign-in/sign-out and the shared axios instance in [api.js](frontend/src/services/api.js) attaches the access token automatically.
 
-### Production Security Checklist
-- ✅ HTTPS/TLS encryption
-- ✅ CORS properly configured
-- ✅ Security headers enabled
-- ✅ Environment-based secrets
-- ✅ Rate limiting (planned)
-- ✅ Input validation
-- ✅ SQL injection prevention
-- ✅ XSS protection
+## ML Models
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for complete security configuration.
+- **Random Forest Regressor** — primary prediction (`ml/models/regression_model.py`)
+- **LSTM** — sequential forecasting (`ml/models/lstm_model.py`)
+- **Isolation Forest** — anomaly detection (`ml/models/anomaly_detector.py`)
 
-## 🧪 Development
-
-### Local Development Setup
-
-```bash
-# Backend
-cd EnerSight
-python -m venv venv
-.\venv\Scripts\activate  # Windows
-source venv/bin/activate  # Linux/macOS
-pip install -r requirements.txt
-uvicorn backend.main:app --reload --port 8000
-
-# Frontend (new terminal)
-cd frontend
-npm install
-npm run dev
+Trained artifacts live in `ml/models/trained/`. Retrain locally via:
+```powershell
+.\venv\Scripts\python.exe -c "from ml.models.regression_model import train_regression_model; train_regression_model('data/raw/Energy_consumption.csv', 'random_forest')"
 ```
 
-### Running Tests
+## Deployment
 
-```bash
-# Backend tests
-pytest tests/ -v
+The backend deploys to Render via [render.yaml](render.yaml) on the native Python runtime — no Docker. The frontend deploys to Vercel/Netlify/Cloudflare Pages with `npm run build`.
 
-# Frontend tests
-cd frontend
-npm test
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the full guide.
 
-# Coverage report
-pytest --cov=backend tests/
+## Development
+
+### Tests
+```powershell
+.\venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-### Code Quality
-
-```bash
-# Linting
-flake8 backend/
-pylint backend/
-
-# Type checking
-mypy backend/
-
-# Formatting
-black backend/
-isort backend/
+### Linting / type checking
+```powershell
+.\venv\Scripts\python.exe -m black backend/
+.\venv\Scripts\python.exe -m isort backend/
+.\venv\Scripts\python.exe -m mypy backend/
 ```
 
-## 🐳 Docker Commands
-See **[DOCKER.md](DOCKER.md)** for complete Docker documentation.
+## License
 
-**Quick Reference:**
-
-```bash
-# Start services
-docker compose up -d
-
-# Stop services
-docker compose down
-
-# View logs
-docker compose logs -f [service-name]
-
-# Restart service
-docker compose restart [service-name]
-
-# Check status
-docker compose ps
-
-# Execute command in container
-docker compose exec backend python script.py
-
-# Production deployment
-docker compose -f docker-compose.prod.yml up -d
-```
-
-**Service Management:**
-- Backend: `docker compose restart backend`
-- Frontend: `docker compose restart frontend`
-- Database: `docker compose restart postgres influxdb`
-
-**Troubleshooting:**
-- Health checks: `docker inspect enersight-backend | grep Health`
-- Resource usage: `docker stats`
-- Clean up: `docker system prune -acker-compose down -v
-```
-
-## 📈 Performance
-
-- **API Response Time**: < 100ms (p95)
-- **Data Throughput**: 1000+ readings/sec
-- **Prediction Latency**: < 50ms
-- **Dashboard Load Time**: < 2 seconds
-- **ML Model Accuracy**: R² > 0.95
-
-## 🔄 Continuous Integration
-
-```yaml
-# .github/workflows/ci.yml
-name: CI/CD
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Run tests
-        run: |
-          docker-compose up -d
-          docker-compose exec backend pytest
-```
-
-## 🚢 Deployment Options
-
-### Option 1: Docker Compose (Recommended)
-```bash
-docker-compose -f docker-compose.yml up -d
-```
-
-### Option 2: Kubernetes
-```bash
-kubectl apply -f kubernetes/
-```
-
-### Option 3: Cloud Platforms
-- AWS ECS/Fargate
-- Google Cloud Run
-- Azure Container Instances
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
-
-## 🗺️ Roadmap
-
-### Phase 1 (Completed ✅)
-- [x] Core API implementation
-- [x] ML model training and integration
-- [x] InfluxDB integration
-- [x] React dashboard
-- [x] Docker containerization
-- [x] Production-ready configuration
-
-### Phase 2 (Planned)
-- [ ] PostgreSQL integration for user management
-- [ ] Real-time MQTT data ingestion
-- [ ] User authentication and authorization
-- [ ] Custom alert thresholds
-- [ ] Email/SMS notifications
-- [ ] Mobile app (React Native)
-
-### Phase 3 (Future)
-- [ ] Multi-building support
-- [ ] Advanced forecasting (Prophet, ARIMA)
-- [ ] Cost optimization recommendations
-- [ ] Integration with smart home systems
-- [ ] Energy trading marketplace
-- [ ] Carbon footprint tracking
-
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 📧 Contact
-
-**Author**: End of Study Project - 2026
-
-- GitHub: [@yourusername](https://github.com/yourusername)
-- Email: your.email@example.com
-
-## 🙏 Acknowledgments
-
-- FastAPI framework for excellent async API development
-- InfluxDB for reliable time-series storage
-- Scikit-learn and TensorFlow teams
-- React and Vite communities
-- All open-source contributors
-
-## ⚠️ Troubleshooting
-
-### Common Issues
-
-**Issue**: "Backend can't connect to InfluxDB"
-```bash
-# Solution: Check token and restart
-docker-compose restart backend
-docker-compose logs backend
-```
-
-**Issue**: "Frontend shows blank page"
-```bash
-# Solution: Rebuild frontend
-docker-compose build frontend
-docker-compose up -d frontend
-```
-
-**Issue**: "No data in dashboard"
-```bash
-# Solution: Load sample data
-docker-compose exec backend python backend/scripts/load_data_to_influxdb.py
-```
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for complete troubleshooting guide.
-
----
-
-**Built with ❤️ for sustainable energy management**
-
-**Version**: 1.0.0 | **Last Updated**: February 16, 2026
-
-## 👨‍💻 Author
-End of Study Project - 2026
+MIT — see `LICENSE`.

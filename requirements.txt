@@ -3,18 +3,18 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
+email-validator==2.1.1  # required by Pydantic EmailStr
 python-multipart==0.0.6
 
-# Database
-influxdb-client==1.38.0
+# Database (Supabase Postgres)
 psycopg2-binary==2.9.9  # PostgreSQL adapter
 sqlalchemy==2.0.25
 asyncpg==0.29.0  # Async PostgreSQL driver
 aiosqlite==0.19.0  # Async SQLite for testing
+supabase==2.7.4  # Supabase Python client (auth admin, storage, etc.)
 
 # Authentication & Security
-python-jose[cryptography]==3.3.0  # JWT tokens
-passlib[bcrypt]==1.7.4  # Password hashing
+PyJWT[crypto]==2.8.0  # Verify Supabase JWTs (HS256 + JWKS)
 
 # MQTT & IoT
 paho-mqtt==1.6.1

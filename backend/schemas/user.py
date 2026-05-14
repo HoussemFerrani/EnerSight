@@ -41,8 +41,8 @@ class UserUpdate(BaseModel):
 
 
 class UserResponse(UserBase):
-    """Schema for user response (no password)"""
-    id: int
+    """Schema for user response. ID is a Supabase auth.users UUID."""
+    id: str
     role: UserRole
     is_active: bool
     is_verified: bool
@@ -85,9 +85,9 @@ class UserPreferencesUpdate(BaseModel):
 
 
 class UserPreferencesResponse(UserPreferencesBase):
-    """Schema for preferences response"""
-    id: int
-    user_id: int
+    """Schema for preferences response. IDs are UUIDs (auth.users)."""
+    id: str
+    user_id: str
     created_at: datetime
     updated_at: datetime
 

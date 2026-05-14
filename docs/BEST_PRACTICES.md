@@ -132,9 +132,9 @@ class IEnergyRepository(ABC):
         pass
 
 # Implement concrete repository
-class InfluxDBEnergyRepository(IEnergyRepository):
+class PostgresEnergyRepository(IEnergyRepository):
     async def save(self, data: EnergyData) -> None:
-        # InfluxDB-specific implementation
+        # Supabase Postgres implementation (via SQLAlchemy)
         pass
 
 # Easy to swap implementations
@@ -200,7 +200,7 @@ class EnergyService:
 # ❌ Bad - Hard-coded dependency
 class EnergyService:
     def __init__(self):
-        self.repository = InfluxDBRepository()  # Tightly coupled
+        self.repository = PostgresRepository()  # Tightly coupled
 ```
 
 **FastAPI Integration:**
@@ -667,17 +667,18 @@ flake8 backend/ ml/ --max-line-length=100
 mypy backend/ --strict
 ```
 
-### Docker (Future)
+### Deployment
+
+The backend deploys to Render's native Python runtime; the frontend to Vercel/Netlify/Cloudflare Pages. Database is Supabase Postgres. See `DEPLOYMENT.md`.
 
 ```bash
-# Build image
-docker build -t enersight:latest .
+# Local dev
+.\start.ps1                          # Windows
+uvicorn backend.main:app --reload    # backend only
+npm --prefix frontend run dev        # frontend only
 
-# Run container
-docker run -p 8000:8000 enersight:latest
-
-# Docker Compose
-docker-compose up -d
+# Production build
+npm --prefix frontend run build      # static React bundle in frontend/dist
 ```
 
 ---

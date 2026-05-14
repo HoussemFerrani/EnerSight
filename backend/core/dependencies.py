@@ -6,8 +6,8 @@ Manages application dependencies and their lifecycles
 from functools import lru_cache
 from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from backend.core.config import get_settings
 from backend.core.logging import get_logger
@@ -28,21 +28,25 @@ class DatabaseManager:
     def __init__(self):
         self._postgres_engine = None
         self._postgres_session_factory = None
-        self._influxdb_client = None
-    
+
     async def init_postgres(self) -> None:
-        """Initialize PostgreSQL connection pool"""
+        """Initialize Supabase Postgres async engine and session factory."""
         try:
-            # Create async engine with connection pooling
+            url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            # Supabase's transaction pooler (pgbouncer) does NOT support prepared statements.
+            # asyncpg caches them by default — disable the cache and prepared-statement
+            # creation to avoid "prepared statement does not exist" errors.
             self._postgres_engine = create_async_engine(
-                settings.postgres_url.replace("postgresql://", "postgresql+asyncpg://"),
-                pool_size=10,
-                max_overflow=20,
+                url,
+                pool_size=settings.db_pool_size,
+                max_overflow=settings.db_max_overflow,
                 pool_pre_ping=True,
                 echo=settings.debug,
+                connect_args={
+                    "statement_cache_size": 0,
+                    "prepared_statement_cache_size": 0,
+                },
             )
-            
-            # Create session factory
             self._postgres_session_factory = async_sessionmaker(
                 self._postgres_engine,
                 class_=AsyncSession,
@@ -50,31 +54,19 @@ class DatabaseManager:
                 autocommit=False,
                 autoflush=False,
             )
-            
-            logger.info("PostgreSQL connection pool initialized")
+            logger.info("Postgres async engine initialized")
         except Exception as e:
-            logger.error(f"Failed to initialize PostgreSQL: {e}")
+            logger.error(f"Failed to initialize Postgres: {e}")
             raise
-    
+
     async def close_postgres(self) -> None:
-        """Close PostgreSQL connection pool"""
         if self._postgres_engine:
             await self._postgres_engine.dispose()
-            logger.info("PostgreSQL connection pool closed")
-    
+            logger.info("Postgres engine disposed")
+
     async def get_postgres_session(self) -> AsyncGenerator[AsyncSession, None]:
-        """
-        Get PostgreSQL session (dependency)
-        
-        Usage:
-            @app.get("/users")
-            async def get_users(db: AsyncSession = Depends(get_postgres_session)):
-                result = await db.execute(select(User))
-                return result.scalars().all()
-        """
         if not self._postgres_session_factory:
-            raise RuntimeError("PostgreSQL not initialized. Call init_postgres() first.")
-        
+            raise RuntimeError("Postgres not initialized. Call init_postgres() first.")
         async with self._postgres_session_factory() as session:
             try:
                 yield session
@@ -82,40 +74,6 @@ class DatabaseManager:
             except Exception:
                 await session.rollback()
                 raise
-    
-    def init_influxdb(self) -> None:
-        """Initialize InfluxDB client"""
-        try:
-            self._influxdb_client = InfluxDBClientAsync(
-                url=settings.influxdb_url,
-                token=settings.influxdb_token,
-                org=settings.influxdb_org,
-                timeout=settings.influxdb_timeout,
-            )
-            logger.info("InfluxDB client initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize InfluxDB: {e}")
-            raise
-    
-    async def close_influxdb(self) -> None:
-        """Close InfluxDB client"""
-        if self._influxdb_client:
-            await self._influxdb_client.close()
-            logger.info("InfluxDB client closed")
-    
-    def get_influxdb_client(self) -> InfluxDBClientAsync:
-        """
-        Get InfluxDB client (dependency)
-        
-        Usage:
-            @app.get("/energy")
-            async def get_energy(influx: InfluxDBClientAsync = Depends(get_influxdb_client)):
-                query_api = influx.query_api()
-                ...
-        """
-        if not self._influxdb_client:
-            raise RuntimeError("InfluxDB not initialized. Call init_influxdb() first.")
-        return self._influxdb_client
 
 
 # Singleton instance
@@ -131,12 +89,6 @@ async def get_postgres_session() -> AsyncGenerator[AsyncSession, None]:
     db_manager = get_database_manager()
     async for session in db_manager.get_postgres_session():
         yield session
-
-
-def get_influxdb_client() -> InfluxDBClientAsync:
-    """FastAPI dependency for InfluxDB client"""
-    db_manager = get_database_manager()
-    return db_manager.get_influxdb_client()
 
 
 # ==================== Service Dependencies ====================
@@ -253,64 +205,35 @@ def get_model_registry() -> ModelRegistry:
 
 # ==================== Service Layer Dependencies ====================
 
-def get_energy_service() -> EnergyService:
+async def get_energy_service(
+    session: AsyncSession = Depends(get_postgres_session),
+) -> EnergyService:
     """
-    Get EnergyService instance with all dependencies
-    
-    FastAPI Dependency for injecting EnergyService into route handlers.
-    Creates service with repository and ML models.
-    
-    Usage:
-        @router.post("/predict")
-        async def predict(service: EnergyService = Depends(get_energy_service)):
-            result = await service.predict_consumption(...)
-            return result
+    Construct an EnergyService bound to a Postgres session and the ML registry.
+
+    FastAPI resolves the session via `Depends(get_postgres_session)`.
     """
     from backend.repositories.energy_repository import EnergyDataRepository
-    
-    # Get database client
-    db_manager = get_database_manager()
-    
-    # Create repository (may be with mock client if InfluxDB not configured)
-    repository = None
-    try:
-        influx_client = db_manager.get_influxdb_client()
-        bucket = settings.influxdb_bucket
-        org = settings.influxdb_org
-        repository = EnergyDataRepository(
-            influxdb_client=influx_client,
-            bucket=bucket,
-            org=org,
-        )
-    except RuntimeError:
-        # InfluxDB not configured - use defaults
-        logger.warning("InfluxDB not available, some features may be limited")
-    
-    # Get ML models from registry (optional - may not be loaded)
+
+    repository = EnergyDataRepository(session=session)
+
     model_registry = get_model_registry()
-    
     try:
         regression_model = model_registry.get_model("regression")
-    except (ValueError, Exception):
+    except Exception:
         regression_model = None
         logger.warning("Regression model not loaded")
-    
     try:
         lstm_model = model_registry.get_model("lstm")
-    except (ValueError, Exception):
+    except Exception:
         lstm_model = None
         logger.warning("LSTM model not loaded")
-    
     try:
         anomaly_detector = model_registry.get_model("anomaly_detector")
-    except (ValueError, Exception):
+    except Exception:
         anomaly_detector = None
         logger.warning("Anomaly detector not loaded")
-    
-    # Create and return service
-    if repository is None:
-        logger.warning("No energy repository available, EnergyService will have limited functionality")
-    
+
     return EnergyService(
         energy_repository=repository,
         regression_model=regression_model,
@@ -332,23 +255,14 @@ async def init_dependencies() -> None:
     db_manager = get_database_manager()
     
     try:
-        # PostgreSQL (optional - may not be configured)
-        if settings.postgres_password:
+        if settings.database_url:
             await db_manager.init_postgres()
         else:
-            logger.warning("PostgreSQL credentials not configured, skipping initialization")
+            logger.warning("DATABASE_URL not configured, skipping Postgres initialization")
     except Exception as e:
-        logger.warning(f"PostgreSQL initialization failed: {e}")
-    
-    try:
-        # InfluxDB (optional - may not be configured)
-        if settings.influxdb_token:
-            db_manager.init_influxdb()
-        else:
-            logger.warning("InfluxDB token not configured, skipping initialization")
-    except Exception as e:
-        logger.warning(f"InfluxDB initialization failed: {e}")
-    
+        logger.warning(f"Postgres initialization failed: {e}")
+
+
     # Register ML models
     logger.info("Registering ML models...")
     model_registry = get_model_registry()
@@ -398,8 +312,6 @@ async def cleanup_dependencies() -> None:
     
     db_manager = get_database_manager()
     
-    # Close database connections
     await db_manager.close_postgres()
-    await db_manager.close_influxdb()
     
     logger.info("Application dependencies cleaned up")

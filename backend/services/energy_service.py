@@ -126,7 +126,7 @@ class EnergyService:
         
         # Store in database
         if not self.repository:
-            raise DatabaseConnectionError("InfluxDB", {"reason": "Repository not configured"})
+            raise DatabaseConnectionError("Postgres", {"reason": "Repository not configured"})
         
         try:
             await self.repository.write_measurement(
@@ -184,7 +184,7 @@ class EnergyService:
             List of energy consumption records
         """
         if not self.repository:
-            raise DatabaseConnectionError("InfluxDB", {"reason": "Repository not configured"})
+            raise DatabaseConnectionError("Postgres", {"reason": "Repository not configured"})
         
         filters = {}
         if device_id:
@@ -318,7 +318,7 @@ class EnergyService:
             List of detected anomalies with details
         """
         if not self.repository:
-            raise DatabaseConnectionError("InfluxDB", {"reason": "Repository not configured"})
+            raise DatabaseConnectionError("Postgres", {"reason": "Repository not configured"})
         
         if not self.anomaly_detector:
             raise MLException("Anomaly detector not loaded")
@@ -384,7 +384,7 @@ class EnergyService:
             Statistical summary
         """
         if not self.repository:
-            raise DatabaseConnectionError("InfluxDB", {"reason": "Repository not configured"})
+            raise DatabaseConnectionError("Postgres", {"reason": "Repository not configured"})
         
         # Get aggregated data
         daily_data = await self.repository.aggregate(
@@ -403,8 +403,8 @@ class EnergyService:
                 "days": 0,
             }
         
-        # Calculate statistics - field name is "consumption" not "total_consumption"
-        consumptions = [d["value"] for d in daily_data if d["field"] == "consumption"]
+        # Postgres aggregate returns one row per bucket with a "value" column.
+        consumptions = [d["value"] for d in daily_data if d.get("value") is not None]
         
         return {
             "total_consumption": round(sum(consumptions), 2),

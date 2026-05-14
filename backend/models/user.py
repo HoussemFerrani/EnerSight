@@ -1,95 +1,82 @@
 """
-Database models for user management
+Profile and user preference ORM models, mirroring the Supabase schema.
+
+Authentication is owned by Supabase Auth — `auth.users` is the source of truth
+for credentials, sessions, and email verification. `public.profiles` holds
+application-specific data and is keyed by the same UUID.
 """
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum
+
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+
 from backend.database.postgres import Base
-import enum
 
 
-class UserRole(str, enum.Enum):
-    """User role enumeration"""
-    ADMIN = "admin"
-    USER = "user"
-    VIEWER = "viewer"
+class Profile(Base):
+    """Application profile keyed by auth.users(id)."""
+    __tablename__ = "profiles"
 
-
-class User(Base):
-    """User model for authentication and profile management"""
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    username = Column(String(100), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
-    full_name = Column(String(200))
-    role = Column(Enum(UserRole), default=UserRole.USER, nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    full_name = Column(String)
+    role = Column(String, default="user", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
-    
-    # Profile fields
-    phone = Column(String(20))
+    phone = Column(String)
     address = Column(Text)
-    
-    # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    last_login = Column(DateTime)
-    
+    last_login = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
     def __repr__(self):
-        return f"<User {self.username} ({self.email})>"
-    
+        return f"<Profile {self.username} ({self.id})>"
+
     def to_dict(self):
-        """Convert model to dictionary"""
         return {
-            "id": self.id,
-            "email": self.email,
+            "id": str(self.id),
             "username": self.username,
             "full_name": self.full_name,
-            "role": self.role.value if self.role is not None else None,
+            "role": self.role,
             "is_active": self.is_active,
             "is_verified": self.is_verified,
             "phone": self.phone,
             "address": self.address,
-            "created_at": self.created_at.isoformat() if self.created_at is not None else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at is not None else None,
-            "last_login": self.last_login.isoformat() if self.last_login is not None else None,
+            "last_login": self.last_login.isoformat() if self.last_login else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
 
+# Backwards-compat alias: existing code paths import `User` from this module.
+User = Profile
+
+
 class UserPreferences(Base):
-    """User preferences and settings"""
+    """User-scoped UI/notification preferences."""
     __tablename__ = "user_preferences"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, index=True, nullable=False)
-    
-    # Dashboard preferences
-    theme = Column(String(20), default="light")  # light, dark, auto
-    language = Column(String(10), default="en")
-    timezone = Column(String(50), default="UTC")
-    
-    # Notification preferences
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), unique=True, nullable=False, index=True)
+    theme = Column(String, default="light")
+    language = Column(String, default="en")
+    timezone = Column(String, default="UTC")
     email_notifications = Column(Boolean, default=True)
     push_notifications = Column(Boolean, default=True)
     alert_threshold_kwh = Column(Integer, default=500)
-    
-    # Display preferences
-    date_format = Column(String(20), default="YYYY-MM-DD")
-    currency = Column(String(10), default="USD")
-    energy_unit = Column(String(10), default="kWh")
-    
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+    date_format = Column(String, default="YYYY-MM-DD")
+    currency = Column(String, default="USD")
+    energy_unit = Column(String, default="kWh")
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
     def __repr__(self):
         return f"<UserPreferences user_id={self.user_id}>"
-    
+
     def to_dict(self):
-        """Convert model to dictionary"""
         return {
-            "id": self.id,
-            "user_id": self.user_id,
+            "id": str(self.id),
+            "user_id": str(self.user_id),
             "theme": self.theme,
             "language": self.language,
             "timezone": self.timezone,
@@ -99,6 +86,6 @@ class UserPreferences(Base):
             "date_format": self.date_format,
             "currency": self.currency,
             "energy_unit": self.energy_unit,
-            "created_at": self.created_at.isoformat() if self.created_at is not None else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at is not None else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

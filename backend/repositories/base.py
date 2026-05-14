@@ -5,9 +5,8 @@ Provides abstraction layer for data access with generic CRUD operations
 
 from abc import ABC, abstractmethod
 from typing import Any, Generic, Optional, TypeVar, List
-from datetime import datetime
 
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Generic type for model
@@ -177,86 +176,6 @@ class BaseRepository(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]
             select(self.model.id).where(self.model.id == id)
         )
         return result.scalar_one_or_none() is not None
-
-
-class TimeSeriesRepository(ABC):
-    """
-    Abstract repository for time-series data (InfluxDB)
-    
-    Provides common operations for energy consumption time-series data
-    """
-    
-    def __init__(self, influxdb_client, bucket: str, org: str):
-        """
-        Initialize time-series repository
-        
-        Args:
-            influxdb_client: InfluxDB async client
-            bucket: InfluxDB bucket name
-            org: InfluxDB organization
-        """
-        self.client = influxdb_client
-        self.bucket = bucket
-        self.org = org
-    
-    @abstractmethod
-    async def write_measurement(self, measurement: str, tags: dict, fields: dict, timestamp: datetime) -> None:
-        """
-        Write measurement to InfluxDB
-        
-        Args:
-            measurement: Measurement name
-            tags: Dictionary of tag key-value pairs
-            fields: Dictionary of field key-value pairs
-            timestamp: Measurement timestamp
-        """
-        pass
-    
-    @abstractmethod
-    async def query_range(
-        self,
-        measurement: str,
-        start: datetime,
-        stop: datetime,
-        filters: Optional[dict[str, Any]] = None
-    ) -> List[dict]:
-        """
-        Query time-series data within time range
-        
-        Args:
-            measurement: Measurement name
-            start: Start timestamp
-            stop: Stop timestamp
-            filters: Optional tag filters
-        
-        Returns:
-            List of data points
-        """
-        pass
-    
-    @abstractmethod
-    async def aggregate(
-        self,
-        measurement: str,
-        start: datetime,
-        stop: datetime,
-        aggregation: str,
-        window: str
-    ) -> List[dict]:
-        """
-        Aggregate time-series data
-        
-        Args:
-            measurement: Measurement name
-            start: Start timestamp
-            stop: Stop timestamp
-            aggregation: Aggregation function (mean, sum, max, min)
-            window: Time window (e.g., "1h", "1d")
-        
-        Returns:
-            List of aggregated data points
-        """
-        pass
 
 
 class UnitOfWork(ABC):

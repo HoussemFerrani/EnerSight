@@ -32,7 +32,7 @@ async def get_alerts(
     db: Session = Depends(get_db)
 ):
     """Get alerts for current user with optional filters"""
-    query = db.query(Alert).filter(Alert.user_id == int(current_user.id))
+    query = db.query(Alert).filter(Alert.user_id == current_user.id)
     
     if status:
         query = query.filter(Alert.status == status.value)
@@ -54,7 +54,7 @@ async def get_alert_summary(
     db: Session = Depends(get_db)
 ):
     """Get alert summary statistics for current user"""
-    user_id = int(current_user.id)
+    user_id = current_user.id
     
     # Total alerts
     total_alerts = db.query(func.count(Alert.id)).filter(Alert.user_id == user_id).scalar()
@@ -104,7 +104,7 @@ async def get_alert(
     """Get specific alert by ID"""
     alert = db.query(Alert).filter(
         Alert.id == alert_id,
-        Alert.user_id == int(current_user.id)
+        Alert.user_id == current_user.id
     ).first()
     
     if not alert:
@@ -120,12 +120,17 @@ async def create_alert(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new alert (admin or system use)"""
-    # Verify user is creating alert for themselves or is admin
-    if int(current_user.id) != alert_data.user_id and str(current_user.role) != "admin":
+    from uuid import UUID
+    try:
+        target_uid = UUID(alert_data.user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user_id")
+
+    if target_uid != current_user.id and str(current_user.role) != "admin":
         raise HTTPException(status_code=403, detail="Not authorized to create alerts for other users")
-    
+
     alert = Alert(
-        user_id=alert_data.user_id,
+        user_id=target_uid,
         alert_type=alert_data.alert_type.value,
         severity=alert_data.severity.value,
         title=alert_data.title,
@@ -152,7 +157,7 @@ async def update_alert(
     """Update alert status (acknowledge/resolve)"""
     alert = db.query(Alert).filter(
         Alert.id == alert_id,
-        Alert.user_id == int(current_user.id)
+        Alert.user_id == current_user.id
     ).first()
     
     if not alert:
@@ -189,7 +194,7 @@ async def acknowledge_alert(
     """Acknowledge an alert"""
     alert = db.query(Alert).filter(
         Alert.id == alert_id,
-        Alert.user_id == int(current_user.id)
+        Alert.user_id == current_user.id
     ).first()
     
     if not alert:
@@ -213,7 +218,7 @@ async def resolve_alert(
     """Resolve an alert"""
     alert = db.query(Alert).filter(
         Alert.id == alert_id,
-        Alert.user_id == int(current_user.id)
+        Alert.user_id == current_user.id
     ).first()
     
     if not alert:
@@ -240,7 +245,7 @@ async def delete_alert(
     """Delete an alert"""
     alert = db.query(Alert).filter(
         Alert.id == alert_id,
-        Alert.user_id == int(current_user.id)
+        Alert.user_id == current_user.id
     ).first()
     
     if not alert:

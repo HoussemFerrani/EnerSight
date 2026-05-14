@@ -39,15 +39,16 @@ class Settings(BaseSettings):
     secret_key: str = Field(
         default="dev-secret-key-change-in-production",
         min_length=32,
-        description="Secret key for signing tokens"
+        description="Secret key for application use (not JWT — Supabase signs those)"
     )
-    jwt_secret: str = Field(
-        default="dev-jwt-secret-change-in-production",
-        min_length=32,
-        description="JWT signing secret"
+    # Supabase signs JWTs with its project JWT secret (HS256).
+    # Pull from Supabase Dashboard → Settings → API → JWT Settings.
+    supabase_jwt_secret: str = Field(
+        default="",
+        description="Supabase project JWT secret used to verify access tokens"
     )
-    jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
-    access_token_expire_minutes: int = Field(default=30, ge=1, description="Access token expiry")
+    jwt_algorithm: str = Field(default="HS256", description="JWT algorithm used by Supabase")
+    supabase_jwt_audience: str = Field(default="authenticated", description="Expected aud claim")
     
     # CORS Configuration
     cors_origins: str = Field(
@@ -60,27 +61,17 @@ class Settings(BaseSettings):
         """Get CORS origins as a list"""
         return [origin.strip() for origin in self.cors_origins.split(",")]
     
-    # Database - InfluxDB
-    influxdb_url: str = Field(default="http://localhost:8086", description="InfluxDB URL")
-    influxdb_token: str = Field(default="", description="InfluxDB authentication token")
-    influxdb_org: str = Field(default="enersight", description="InfluxDB organization")
-    influxdb_bucket: str = Field(default="energy_data", description="InfluxDB bucket")
-    influxdb_timeout: int = Field(default=10000, ge=1000, description="InfluxDB timeout (ms)")
-    
-    # Database - PostgreSQL
-    postgres_host: str = Field(default="localhost", description="PostgreSQL host")
-    postgres_port: int = Field(default=5432, ge=1, le=65535, description="PostgreSQL port")
-    postgres_db: str = Field(default="enersight", description="PostgreSQL database name")
-    postgres_user: str = Field(default="enersight_user", description="PostgreSQL user")
-    postgres_password: str = Field(default="", description="PostgreSQL password")
-    
-    @property
-    def postgres_url(self) -> str:
-        """Construct PostgreSQL connection URL"""
-        return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
+    # Database - Supabase Postgres
+    # Pooler connection (port 6543) recommended for backend workloads.
+    # Format: postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
+    database_url: str = Field(default="", description="Supabase Postgres connection URL")
+    db_pool_size: int = Field(default=10, ge=1, description="SQLAlchemy pool size")
+    db_max_overflow: int = Field(default=20, ge=0, description="SQLAlchemy max overflow")
+
+    # Supabase project (for client-side keys and admin operations)
+    supabase_url: str = Field(default="", description="Supabase project URL")
+    supabase_anon_key: str = Field(default="", description="Supabase publishable/anon key")
+    supabase_service_role_key: str = Field(default="", description="Supabase service role key (server-side only)")
     
     # MQTT Configuration
     mqtt_broker: str = Field(default="localhost", description="MQTT broker address")

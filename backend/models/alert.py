@@ -3,6 +3,7 @@ Alert models for energy consumption monitoring
 """
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.database.postgres import Base
 import enum
@@ -36,7 +37,7 @@ class Alert(Base):
     __tablename__ = "alerts"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Alert details
     alert_type = Column(Enum(AlertType), nullable=False)
@@ -62,7 +63,7 @@ class Alert(Base):
     resolved_at = Column(DateTime)
     
     # Relationship
-    user = relationship("User", backref="alerts")
+    user = relationship("Profile", backref="alerts")
     
     def __repr__(self):
         return f"<Alert {self.id} - {self.alert_type} ({self.severity})>"
@@ -71,7 +72,7 @@ class Alert(Base):
         """Convert model to dictionary"""
         return {
             "id": self.id,
-            "user_id": self.user_id,
+            "user_id": str(self.user_id) if self.user_id else None,
             "alert_type": self.alert_type.value if self.alert_type else None,
             "severity": self.severity.value if self.severity else None,
             "status": self.status.value if self.status else None,

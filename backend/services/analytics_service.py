@@ -1,153 +1,142 @@
 """
-Enhanced analytics service for advanced data processing
+Analytics service backed by Supabase Postgres.
+
+Replaces the previous InfluxDB/Flux implementation. Reads from
+`public.energy_readings` via SQLAlchemy and computes aggregates with
+`date_trunc` / `avg` / `sum`.
 """
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
-import pandas as pd
-from influxdb_client import InfluxDBClient
 
-from backend.database.influxdb_client import influx_db
+from sqlalchemy import func
+
+from backend.database.postgres import SessionLocal
+from backend.models.energy import EnergyReading
 from backend.schemas.analytics import (
     AggregatedData,
+    AggregationPeriod,
     AnalyticsSummary,
     ComparisonResult,
     CostCalculation,
-    AggregationPeriod
 )
 
 
+_PERIOD_TO_TRUNC = {
+    "hour": "hour",
+    "day": "day",
+    "week": "week",
+    "month": "month",
+    "year": "year",
+}
+
+
 class AnalyticsService:
-    """Service for enhanced analytics operations"""
-    
-    def __init__(self):
-        self.query_api = influx_db.query_api
-        self.bucket = "energy_data"
-    
+    """Reads aggregates from `energy_readings` in Postgres."""
+
     def get_data_range(
         self,
         start_date: datetime,
         end_date: datetime,
-        aggregation: Optional[str] = None
+        aggregation: Optional[str] = None,
     ) -> List[dict]:
-        """Get energy data for a specific date range with optional aggregation"""
-        
-        if aggregation:
-            window_size = self._get_window_size(aggregation)
-            query = f'''
-            from(bucket: "{self.bucket}")
-              |> range(start: {start_date.isoformat()}Z, stop: {end_date.isoformat()}Z)
-              |> filter(fn: (r) => r["_measurement"] == "energy_consumption")
-              |> filter(fn: (r) => r["_field"] == "value")
-              |> aggregateWindow(every: {window_size}, fn: sum, createEmpty: false)
-            '''
-        else:
-            query = f'''
-            from(bucket: "{self.bucket}")
-              |> range(start: {start_date.isoformat()}Z, stop: {end_date.isoformat()}Z)
-              |> filter(fn: (r) => r["_measurement"] == "energy_consumption")
-              |> filter(fn: (r) => r["_field"] == "value")
-            '''
-        
-        tables = self.query_api.query(query)
-        
-        data = []
-        for table in tables:
-            for record in table.records:
-                data.append({
-                    "timestamp": record.get_time().isoformat(),
-                    "value": float(record.get_value()),
-                    "unit": "kWh"
-                })
-        
-        return data
-    
+        """Return individual or bucketed energy points between two dates."""
+        with SessionLocal() as session:
+            if aggregation:
+                trunc = _PERIOD_TO_TRUNC.get(aggregation, "hour")
+                bucket = func.date_trunc(trunc, EnergyReading.recorded_at).label("bucket")
+                rows = (
+                    session.query(bucket, func.sum(EnergyReading.consumption).label("value"))
+                    .filter(EnergyReading.recorded_at >= start_date, EnergyReading.recorded_at < end_date)
+                    .group_by(bucket)
+                    .order_by(bucket.asc())
+                    .all()
+                )
+                return [
+                    {"timestamp": r.bucket.isoformat(), "value": float(r.value or 0.0), "unit": "kWh"}
+                    for r in rows
+                ]
+
+            rows = (
+                session.query(EnergyReading.recorded_at, EnergyReading.consumption)
+                .filter(EnergyReading.recorded_at >= start_date, EnergyReading.recorded_at < end_date)
+                .order_by(EnergyReading.recorded_at.asc())
+                .all()
+            )
+            return [
+                {"timestamp": r.recorded_at.isoformat(), "value": float(r.consumption or 0.0), "unit": "kWh"}
+                for r in rows
+            ]
+
     def get_aggregated_data(
         self,
         start_date: datetime,
         end_date: datetime,
-        period: AggregationPeriod
+        period: AggregationPeriod,
     ) -> List[AggregatedData]:
-        """Get aggregated energy data by period"""
-        
-        window_size = self._get_window_size(period.value)
-        
-        query = f'''
-        from(bucket: "{self.bucket}")
-          |> range(start: {start_date.isoformat()}Z, stop: {end_date.isoformat()}Z)
-          |> filter(fn: (r) => r["_measurement"] == "energy_consumption")
-          |> filter(fn: (r) => r["_field"] == "value")
-          |> aggregateWindow(every: {window_size}, fn: mean, createEmpty: false)
-        '''
-        
-        tables = self.query_api.query(query)
-        
-        # Group data by periods
+        """Average consumption per bucket with per-bucket min/max/total/count."""
+        trunc = _PERIOD_TO_TRUNC.get(period.value, "hour")
+        with SessionLocal() as session:
+            bucket = func.date_trunc(trunc, EnergyReading.recorded_at).label("bucket")
+            rows = (
+                session.query(
+                    bucket,
+                    func.sum(EnergyReading.consumption).label("total"),
+                    func.avg(EnergyReading.consumption).label("avg"),
+                    func.min(EnergyReading.consumption).label("min"),
+                    func.max(EnergyReading.consumption).label("max"),
+                    func.count(EnergyReading.id).label("count"),
+                )
+                .filter(EnergyReading.recorded_at >= start_date, EnergyReading.recorded_at < end_date)
+                .group_by(bucket)
+                .order_by(bucket.asc())
+                .all()
+            )
+
         results = []
-        for table in tables:
-            for record in table.records:
-                period_time = record.get_time()
-                value = float(record.get_value())
-                
-                # Calculate period boundaries
-                period_start, period_end = self._get_period_boundaries(period_time, period)
-                
-                results.append(AggregatedData(
+        for r in rows:
+            period_start, period_end = self._get_period_boundaries(r.bucket, period)
+            results.append(
+                AggregatedData(
                     period_start=period_start,
                     period_end=period_end,
-                    total=value,
-                    average=value,
-                    min=value,
-                    max=value,
-                    count=1
-                ))
-        
+                    total=float(r.total or 0.0),
+                    average=float(r.avg or 0.0),
+                    min=float(r.min or 0.0),
+                    max=float(r.max or 0.0),
+                    count=int(r.count or 0),
+                )
+            )
         return results
-    
+
     def calculate_cost(
         self,
         start_date: datetime,
         end_date: datetime,
-        cost_per_kwh: float = 0.12
+        cost_per_kwh: float = 0.12,
     ) -> CostCalculation:
-        """Calculate energy cost for a period"""
-        
-        query = f'''
-        from(bucket: "{self.bucket}")
-          |> range(start: {start_date.isoformat()}Z, stop: {end_date.isoformat()}Z)
-          |> filter(fn: (r) => r["_measurement"] == "energy_consumption")
-          |> filter(fn: (r) => r["_field"] == "value")
-          |> sum()
-        '''
-        
-        tables = self.query_api.query(query)
-        
-        total_kwh = 0.0
-        for table in tables:
-            for record in table.records:
-                total_kwh += float(record.get_value())
-        
-        total_cost = total_kwh * cost_per_kwh
-        
+        with SessionLocal() as session:
+            total_kwh = (
+                session.query(func.coalesce(func.sum(EnergyReading.consumption), 0.0))
+                .filter(EnergyReading.recorded_at >= start_date, EnergyReading.recorded_at < end_date)
+                .scalar()
+            ) or 0.0
+        total_kwh = float(total_kwh)
         return CostCalculation(
             period_start=start_date,
             period_end=end_date,
             total_kwh=total_kwh,
             cost_per_kwh=cost_per_kwh,
-            total_cost=total_cost,
-            currency="USD"
+            total_cost=total_kwh * cost_per_kwh,
+            currency="USD",
         )
-    
+
     def get_summary(
         self,
         start_date: datetime,
         end_date: datetime,
-        cost_per_kwh: Optional[float] = None
+        cost_per_kwh: Optional[float] = None,
     ) -> AnalyticsSummary:
-        """Get comprehensive analytics summary"""
-        
-        # Get all data points
         data = self.get_data_range(start_date, end_date)
-        
         if not data:
             return AnalyticsSummary(
                 total_consumption=0.0,
@@ -158,166 +147,113 @@ class AnalyticsService:
                 lowest_timestamp=start_date,
                 period_start=start_date,
                 period_end=end_date,
-                data_points=0
+                data_points=0,
             )
-        
-        # Calculate statistics
+
         values = [d["value"] for d in data]
         total = sum(values)
         days = (end_date - start_date).days or 1
-        avg_daily = total / days
-        
-        # Find peak and lowest
         peak_idx = values.index(max(values))
         lowest_idx = values.index(min(values))
-        
-        peak_timestamp = datetime.fromisoformat(data[peak_idx]["timestamp"].replace("Z", "+00:00"))
-        lowest_timestamp = datetime.fromisoformat(data[lowest_idx]["timestamp"].replace("Z", "+00:00"))
-        
-        # Calculate cost if requested
-        total_cost = None
-        if cost_per_kwh:
-            total_cost = total * cost_per_kwh
-        
+        peak_ts = datetime.fromisoformat(data[peak_idx]["timestamp"])
+        lowest_ts = datetime.fromisoformat(data[lowest_idx]["timestamp"])
         return AnalyticsSummary(
             total_consumption=total,
-            average_daily=avg_daily,
+            average_daily=total / days,
             peak_consumption=max(values),
-            peak_timestamp=peak_timestamp,
+            peak_timestamp=peak_ts,
             lowest_consumption=min(values),
-            lowest_timestamp=lowest_timestamp,
-            total_cost=total_cost,
+            lowest_timestamp=lowest_ts,
+            total_cost=(total * cost_per_kwh) if cost_per_kwh else None,
             period_start=start_date,
             period_end=end_date,
-            data_points=len(data)
+            data_points=len(data),
         )
-    
+
     def compare_periods(
         self,
         current_start: datetime,
         current_end: datetime,
-        comparison_type: str = "previous_period"
+        comparison_type: str = "previous_period",
     ) -> ComparisonResult:
-        """Compare current period with another period"""
-        
-        # Calculate comparison period dates
         period_duration = current_end - current_start
-        
         if comparison_type == "previous_period":
-            comp_start = current_start - period_duration
-            comp_end = current_start
+            comp_start, comp_end = current_start - period_duration, current_start
         elif comparison_type == "same_period_last_month":
-            comp_start = current_start - timedelta(days=30)
-            comp_end = current_end - timedelta(days=30)
+            comp_start, comp_end = current_start - timedelta(days=30), current_end - timedelta(days=30)
         elif comparison_type == "same_period_last_year":
-            comp_start = current_start - timedelta(days=365)
-            comp_end = current_end - timedelta(days=365)
+            comp_start, comp_end = current_start - timedelta(days=365), current_end - timedelta(days=365)
         else:
             raise ValueError(f"Invalid comparison type: {comparison_type}")
-        
-        # Get data for both periods
+
         current_data = self.get_data_range(current_start, current_end)
         comparison_data = self.get_data_range(comp_start, comp_end)
-        
-        # Calculate aggregates
-        current_total = sum(d["value"] for d in current_data)
-        current_avg = current_total / len(current_data) if current_data else 0
-        
-        comp_total = sum(d["value"] for d in comparison_data)
-        comp_avg = comp_total / len(comparison_data) if comparison_data else 0
-        
-        # Calculate difference and percentage
-        difference = current_total - comp_total
-        percentage_change = (difference / comp_total * 100) if comp_total > 0 else 0
-        
-        current_agg = AggregatedData(
-            period_start=current_start,
-            period_end=current_end,
-            total=current_total,
-            average=current_avg,
-            min=min((d["value"] for d in current_data), default=0),
-            max=max((d["value"] for d in current_data), default=0),
-            count=len(current_data)
-        )
-        
-        comparison_agg = AggregatedData(
-            period_start=comp_start,
-            period_end=comp_end,
-            total=comp_total,
-            average=comp_avg,
-            min=min((d["value"] for d in comparison_data), default=0),
-            max=max((d["value"] for d in comparison_data), default=0),
-            count=len(comparison_data)
-        )
-        
+
+        cur_total = sum(d["value"] for d in current_data)
+        cur_avg = cur_total / len(current_data) if current_data else 0
+        cmp_total = sum(d["value"] for d in comparison_data)
+        cmp_avg = cmp_total / len(comparison_data) if comparison_data else 0
+        diff = cur_total - cmp_total
+        pct = (diff / cmp_total * 100) if cmp_total > 0 else 0
+
         return ComparisonResult(
-            current_period=current_agg,
-            comparison_period=comparison_agg,
-            difference=difference,
-            percentage_change=percentage_change,
-            comparison_type=comparison_type
+            current_period=AggregatedData(
+                period_start=current_start,
+                period_end=current_end,
+                total=cur_total,
+                average=cur_avg,
+                min=min((d["value"] for d in current_data), default=0),
+                max=max((d["value"] for d in current_data), default=0),
+                count=len(current_data),
+            ),
+            comparison_period=AggregatedData(
+                period_start=comp_start,
+                period_end=comp_end,
+                total=cmp_total,
+                average=cmp_avg,
+                min=min((d["value"] for d in comparison_data), default=0),
+                max=max((d["value"] for d in comparison_data), default=0),
+                count=len(comparison_data),
+            ),
+            difference=diff,
+            percentage_change=pct,
+            comparison_type=comparison_type,
         )
-    
+
     def export_to_csv(
         self,
         start_date: datetime,
         end_date: datetime,
-        aggregation: Optional[str] = None
+        aggregation: Optional[str] = None,
     ) -> str:
-        """Export data to CSV format"""
-        
         data = self.get_data_range(start_date, end_date, aggregation)
-        
         if not data:
             return "timestamp,value,unit\n"
-        
-        # Convert to CSV
-        csv_lines = ["timestamp,value,unit"]
-        for row in data:
-            csv_lines.append(f"{row['timestamp']},{row['value']},{row['unit']}")
-        
-        return "\n".join(csv_lines)
-    
-    def _get_window_size(self, period: str) -> str:
-        """Get InfluxDB window size for aggregation period"""
-        mapping = {
-            "hour": "1h",
-            "day": "1d",
-            "week": "7d",
-            "month": "30d",
-            "year": "365d"
-        }
-        return mapping.get(period, "1h")
-    
+        lines = ["timestamp,value,unit"] + [f"{r['timestamp']},{r['value']},{r['unit']}" for r in data]
+        return "\n".join(lines)
+
     def _get_period_boundaries(
         self,
         timestamp: datetime,
-        period: AggregationPeriod
+        period: AggregationPeriod,
     ) -> Tuple[datetime, datetime]:
-        """Get start and end boundaries for a period"""
-        
         if period == AggregationPeriod.HOUR:
             start = timestamp.replace(minute=0, second=0, microsecond=0)
-            end = start + timedelta(hours=1)
-        elif period == AggregationPeriod.DAY:
+            return start, start + timedelta(hours=1)
+        if period == AggregationPeriod.DAY:
             start = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = start + timedelta(days=1)
-        elif period == AggregationPeriod.WEEK:
-            start = timestamp - timedelta(days=timestamp.weekday())
-            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = start + timedelta(days=7)
-        elif period == AggregationPeriod.MONTH:
+            return start, start + timedelta(days=1)
+        if period == AggregationPeriod.WEEK:
+            start = (timestamp - timedelta(days=timestamp.weekday())).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            return start, start + timedelta(days=7)
+        if period == AggregationPeriod.MONTH:
             start = timestamp.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            if start.month == 12:
-                end = start.replace(year=start.year + 1, month=1)
-            else:
-                end = start.replace(month=start.month + 1)
-        else:  # YEAR
-            start = timestamp.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-            end = start.replace(year=start.year + 1)
-        
-        return start, end
+            end = start.replace(year=start.year + 1, month=1) if start.month == 12 else start.replace(month=start.month + 1)
+            return start, end
+        start = timestamp.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        return start, start.replace(year=start.year + 1)
 
 
-# Singleton instance
 analytics_service = AnalyticsService()

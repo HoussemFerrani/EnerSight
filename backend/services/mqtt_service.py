@@ -37,7 +37,7 @@ class MQTTClient:
             payload = json.loads(msg.payload.decode())
             print(f"Received message on {msg.topic}: {payload}")
             
-            # TODO: Process and store data in InfluxDB
+            # TODO: persist payload to public.energy_readings via the repository
             self.process_sensor_data(payload)
             
         except json.JSONDecodeError as e:
@@ -53,9 +53,9 @@ class MQTTClient:
         if "timestamp" not in data:
             data["timestamp"] = datetime.utcnow().isoformat()
         
-        # TODO: Validate data
-        # TODO: Store in InfluxDB
-        # TODO: Trigger anomaly detection if needed
+        # TODO: validate the payload schema
+        # TODO: persist to public.energy_readings (Supabase Postgres)
+        # TODO: trigger anomaly detection on the new reading
         pass
     
     def connect(self):

@@ -1,74 +1,68 @@
 """
-User authentication and management utilities
+Supabase JWT verification.
+
+Modern Supabase projects sign access tokens with ES256 (asymmetric). The
+public key is published at the project's JWKS endpoint, so verification is
+a local operation after the first JWKS fetch (cached by PyJWKClient).
+
+The legacy HS256 path (verifying with the JWT secret) is kept as a fallback
+in case the project is on the older asymmetric-disabled config.
 """
-import hashlib
-import os
-import base64
-from datetime import datetime, timedelta
+from functools import lru_cache
 from typing import Optional
-from jose import JWTError, jwt
-from dotenv import load_dotenv
 
-load_dotenv()
+import jwt
+from jwt import PyJWKClient
 
-# JWT Configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-jwt-secret-key-change-in-production")
-ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+from backend.core.config import get_settings
 
-# Password hashing with PBKDF2 (built-in to Python, no external dependencies)
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash"""
-    try:
-        # Hash format: salt:hash
-        parts = hashed_password.split(':')
-        if len(parts) != 2:
-            return False
-        salt = base64.b64decode(parts[0].encode())
-        stored_hash = parts[1]
-        
-        # Hash the plain password with the same salt
-        new_hash = hashlib.pbkdf2_hmac('sha256', plain_password.encode(), salt, 100000)
-        new_hash_b64 = base64.b64encode(new_hash).decode()
-        
-        return new_hash_b64 == stored_hash
-    except:
-        return False
+_settings = get_settings()
 
 
-def get_password_hash(password: str) -> str:
-    """Hash a password using PBKDF2"""
-    # Generate a random salt
-    salt = os.urandom(32)
-    
-    # Hash the password
-    pw_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
-   
-    # Return salt:hash (both base64 encoded)
-    salt_b64 = base64.b64encode(salt).decode()
-    hash_b64 = base64.b64encode(pw_hash).decode()
-    
-    return f"{salt_b64}:{hash_b64}"
-
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT access token"""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+@lru_cache(maxsize=1)
+def _jwks_client() -> Optional[PyJWKClient]:
+    """Return a cached JWKS client for the configured Supabase project."""
+    if not _settings.supabase_url:
+        return None
+    url = _settings.supabase_url.rstrip("/") + "/auth/v1/.well-known/jwks.json"
+    # cache_keys=True keeps signing keys in memory; lifespan refreshes the JWKS hourly.
+    return PyJWKClient(url, cache_jwk_set=True, lifespan=3600)
 
 
 def verify_token(token: str) -> Optional[dict]:
-    """Verify and decode a JWT token"""
+    """Verify a Supabase access token; return claims or None on failure."""
     try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
+        header = jwt.get_unverified_header(token)
+    except jwt.PyJWTError:
+        return None
+
+    alg = header.get("alg", "HS256")
+
+    # Asymmetric path (ES256/RS256/EdDSA) — fetch the public key via JWKS.
+    if alg in ("ES256", "ES384", "ES512", "RS256", "RS384", "RS512", "EdDSA"):
+        client = _jwks_client()
+        if client is None:
+            return None
+        try:
+            key = client.get_signing_key_from_jwt(token).key
+            return jwt.decode(
+                token,
+                key,
+                algorithms=[alg],
+                audience=_settings.supabase_jwt_audience,
+            )
+        except jwt.PyJWTError:
+            return None
+
+    # Legacy symmetric (HS256) path.
+    if not _settings.supabase_jwt_secret:
+        return None
+    try:
+        return jwt.decode(
+            token,
+            _settings.supabase_jwt_secret,
+            algorithms=[alg],
+            audience=_settings.supabase_jwt_audience,
+        )
+    except jwt.PyJWTError:
         return None

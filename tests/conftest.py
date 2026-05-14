@@ -30,10 +30,10 @@ def test_settings() -> Settings:
         environment="testing",
         debug=True,
         log_level="DEBUG",
-        postgres_db="enersight_test",
-        influxdb_bucket="energy_data_test",
+        database_url="postgresql+asyncpg://test:test@localhost/test",
+        supabase_url="https://example.supabase.co",
+        supabase_jwt_secret="test-supabase-jwt-secret-minimum-32-chars-long",
         secret_key="test-secret-key-minimum-32-chars-long",
-        jwt_secret="test-jwt-secret-minimum-32-chars-long",
     )
 
 
@@ -71,26 +71,19 @@ async def async_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest.fixture
-def mock_influxdb_client():
-    """
-    Mock InfluxDB client for testing
-    """
-    mock_client = AsyncMock()
-    mock_client.write_api.return_value = AsyncMock()
-    mock_client.query_api.return_value = AsyncMock()
-    return mock_client
+def mock_async_session():
+    """Mock SQLAlchemy AsyncSession for testing."""
+    session = AsyncMock()
+    session.execute.return_value = AsyncMock()
+    session.add = MagicMock()
+    session.add_all = MagicMock()
+    return session
 
 
 @pytest.fixture
-def energy_repository(mock_influxdb_client):
-    """
-    Energy repository with mocked InfluxDB
-    """
-    return EnergyDataRepository(
-        influxdb_client=mock_influxdb_client,
-        bucket="test_bucket",
-        org="test_org",
-    )
+def energy_repository(mock_async_session):
+    """Energy repository backed by a mocked Postgres session."""
+    return EnergyDataRepository(session=mock_async_session)
 
 
 # ==================== Service Fixtures ====================

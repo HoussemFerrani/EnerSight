@@ -2,9 +2,11 @@
 Authentication Schemas
 Pydantic models for authentication requests and responses
 """
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, Field, field_serializer
 
 
 class LoginRequest(BaseModel):
@@ -75,9 +77,8 @@ class LogoutResponse(BaseModel):
 
 
 class CurrentUserResponse(BaseModel):
-    """Current user information response"""
-    id: int
-    email: str
+    """Current user information response. ID is a Supabase auth.users UUID."""
+    id: UUID
     username: str
     full_name: Optional[str] = None
     role: str
@@ -85,5 +86,9 @@ class CurrentUserResponse(BaseModel):
     is_verified: bool
     created_at: datetime
     last_login: Optional[datetime] = None
-    
+
+    @field_serializer("id")
+    def _id_to_str(self, value: UUID) -> str:
+        return str(value)
+
     model_config = {"from_attributes": True}

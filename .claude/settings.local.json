@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Copy-Item .env.development .env -Force)",
+      "mcp__supabase__execute_sql",
+      "PowerShell(winget --version)",
+      "PowerShell(winget install --id Python.Python.3.11 -e --silent --accept-source-agreements --accept-package-agreements)",
+      "PowerShell($py = \"$env:LOCALAPPDATA\\\\Programs\\\\Python\\\\Python311\\\\python.exe\"; & $py -m venv venv; Write-Host \"venv created\"; & .\\\\venv\\\\Scripts\\\\python.exe --version)",
+      "PowerShell(& .\\\\venv\\\\Scripts\\\\python.exe -m pip install --upgrade pip --quiet 2>&1)",
+      "PowerShell(node --version)",
+      "PowerShell(npm --version)",
+      "PowerShell(& .\\\\venv\\\\Scripts\\\\python.exe -m backend.scripts.load_data_to_supabase 2>&1)",
+      "mcp__supabase__search_docs"
+    ]
+  }
+}

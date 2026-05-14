@@ -209,22 +209,12 @@ async def health_check():
         }
     }
     
-    # Check database connections (non-blocking)
     try:
         db_manager = get_database_manager()
-        
-        # InfluxDB check
-        if db_manager._influxdb_client:
-            health_status["components"]["influxdb"] = "connected"
-        else:
-            health_status["components"]["influxdb"] = "not_configured"
-        
-        # PostgreSQL check
         if db_manager._postgres_engine:
-            health_status["components"]["postgresql"] = "connected"
+            health_status["components"]["postgres"] = "connected"
         else:
-            health_status["components"]["postgresql"] = "not_configured"
-    
+            health_status["components"]["postgres"] = "not_configured"
     except Exception as e:
         logger.warning(f"Health check warning: {e}")
         health_status["components"]["database"] = "unavailable"

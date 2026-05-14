@@ -31,8 +31,8 @@ class AlertStatusEnum(str, Enum):
 
 
 class AlertCreate(BaseModel):
-    """Schema for creating an alert"""
-    user_id: int
+    """Schema for creating an alert. user_id is a Supabase auth.users UUID."""
+    user_id: str
     alert_type: AlertTypeEnum
     severity: AlertSeverityEnum = AlertSeverityEnum.WARNING
     title: str = Field(..., min_length=1, max_length=200)
@@ -43,7 +43,7 @@ class AlertCreate(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "user_id": 1,
+                "user_id": "00000000-0000-0000-0000-000000000000",
                 "alert_type": "threshold_exceeded",
                 "severity": "warning",
                 "title": "Energy threshold exceeded",
@@ -63,9 +63,9 @@ class AlertUpdate(BaseModel):
 
 
 class AlertResponse(BaseModel):
-    """Schema for alert response"""
+    """Schema for alert response. user_id is a Supabase auth.users UUID."""
     id: int
-    user_id: int
+    user_id: str
     alert_type: str
     severity: str
     status: str
@@ -85,7 +85,7 @@ class AlertResponse(BaseModel):
         "json_schema_extra": {
             "example": {
                 "id": 1,
-                "user_id": 1,
+                "user_id": "00000000-0000-0000-0000-000000000000",
                 "alert_type": "threshold_exceeded",
                 "severity": "warning",
                 "status": "sent",

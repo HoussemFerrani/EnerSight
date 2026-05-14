@@ -1,45 +1,37 @@
 """
-Database configuration and session management
+Supabase Postgres connection and session management.
+
+Uses a single DATABASE_URL pointing at the Supabase pooler endpoint.
+SQLAlchemy connects as the `postgres` user, which bypasses RLS — the backend
+acts as a trusted gateway between Supabase Auth (frontend) and the database.
 """
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.ext.declarative import declarative_base
 from typing import Generator
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Session, sessionmaker
 
-# Database URL
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "enersight")
-POSTGRES_USER = os.getenv("POSTGRES_USER", "enersight_user")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "enersight_pass_123")
+from backend.core.config import get_settings
 
-DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+settings = get_settings()
 
-# Create engine
+DATABASE_URL = settings.database_url
+
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
-    echo=False  # Set to True for SQL query logging
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
+    echo=False,
 )
 
-# Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class for models
 Base = declarative_base()
 
 
 def get_db() -> Generator[Session, None, None]:
-    """
-    Dependency for getting database session
-    Usage: db: Session = Depends(get_db)
-    """
+    """FastAPI dependency that yields a Postgres session."""
     db = SessionLocal()
     try:
         yield db
@@ -47,22 +39,21 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def init_db():
-    """Initialize database - create all tables"""
-    from backend.models import user  # Import to register models
-    
-    # Create all tables
-    Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created successfully")
+def init_db() -> None:
+    """
+    Schema is owned by Supabase migrations — this is a no-op kept for backwards
+    compatibility with callers that expect it. To verify connectivity, use
+    check_db_connection().
+    """
+    from backend.models import user, alert  # noqa: F401  (register ORM models)
 
 
 def check_db_connection() -> bool:
-    """Check if database connection is working"""
     from sqlalchemy import text
     try:
         with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
+            connection.execute(text("select 1"))
         return True
     except Exception as e:
-        print(f"❌ Database connection failed: {e}")
+        print(f"Database connection failed: {e}")
         return False
