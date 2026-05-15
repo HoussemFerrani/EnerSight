@@ -17,6 +17,9 @@ EnerSight monitors, analyzes, and optimizes building energy consumption using Io
 - **Real-time monitoring** — live energy consumption tracking
 - **ML predictions** — Random Forest, Gradient Boosting, and LSTM
 - **Anomaly detection** — Isolation Forest with explanations
+- **Optimization recommendations** — rules engine that suggests concrete actions to reduce waste, with projected monthly savings (see [Optimization Recommendations](#optimization-recommendations))
+- **Reports** — downloadable PDF period reports + CSV export of raw readings (see [Reports](#reports))
+- **Edge-deployable ML** — the LSTM forecaster has a TensorFlow Lite variant (~8× smaller, ~49× faster on CPU); see [TensorFlow Lite Inference](#tensorflow-lite-inference)
 - **Interactive dashboards** — Recharts + Chart.js visualizations
 - **Authentication** — Supabase Auth (email/password, JWT)
 - **Alerts** — threshold breaches surface as per-user alerts
@@ -39,6 +42,7 @@ EnerSight monitors, analyzes, and optimizes building energy consumption using Io
 **Data**
 - Supabase Postgres (auth, profiles, alerts, energy time-series, anomalies, predictions)
 - Supabase Auth (replaces the previous custom JWT)
+- **pg_partman + pg_cron** — declarative monthly partitioning of the energy time-series table, with automated partition creation and retention (see [Time-Series Storage](#time-series-storage))
 
 ## Project Structure
 
@@ -139,6 +143,13 @@ This launches:
 - `GET /api/v1/alerts/` — list current user's alerts
 - `POST /api/v1/alerts/{id}/acknowledge` — acknowledge an alert
 
+### Optimizations
+- `GET /api/v1/optimizations/` — ranked list of actionable energy-efficiency recommendations with projected monthly savings (kWh + USD)
+
+### Reports
+- `GET /api/v1/reports/period.pdf` — generated PDF period report (summary, charts, outliers, recommendations)
+- `GET /api/v1/reports/period.csv` — raw reading-level CSV export for the period
+
 ### Auth
 - `GET /api/v1/auth/me` — current user's profile
 - `GET /api/v1/auth/verify` — verify token validity
@@ -157,6 +168,187 @@ CSV columns expected by [load_data_to_supabase.py](backend/scripts/load_data_to_
 ## Authentication
 
 The backend verifies Supabase access tokens using **ES256** asymmetric signatures, fetching the public key from the project's JWKS endpoint (`/auth/v1/.well-known/jwks.json`). The frontend uses `@supabase/supabase-js` for sign-in/sign-out and the shared axios instance in [api.js](frontend/src/services/api.js) attaches the access token automatically.
+
+## TensorFlow Lite Inference
+
+The brief lists **TensorFlow Lite** under the tools section because the project's keyword list explicitly includes *IoT*, *Smart Buildings*, and *Smart Homes*. TFLite is what makes ML deployable to those targets — a stripped-down runtime that runs trained TensorFlow models on Raspberry Pi, ESP32-class gateways, smartphones, and microcontrollers, with **no full TensorFlow install needed**.
+
+### What was added
+
+| File | Role |
+|---|---|
+| [ml/training/export_lstm_tflite.py](ml/training/export_lstm_tflite.py) | Converts the trained `.keras` LSTM into two `.tflite` artifacts (float32 + INT8 dynamic-range quantized), verifies numerical agreement |
+| [ml/training/benchmark_lstm_tflite.py](ml/training/benchmark_lstm_tflite.py) | Benchmarks size, single-step latency, 24-step iterative forecast latency, and prediction error against the Keras baseline |
+| `LSTMTFLiteWrapper` in [backend/ml/model_wrappers.py](backend/ml/model_wrappers.py) | Drop-in replacement for `LSTMModelWrapper`; same `forecast_future()` signature, internally uses `tf.lite.Interpreter` |
+| `LSTM_USE_TFLITE` env var in [backend/core/config.py](backend/core/config.py) | When `true`, [load_lstm_model](backend/ml/model_loaders.py) returns the TFLite wrapper. Defaults to `false` — existing behavior is unchanged. |
+
+### Regenerating the artifacts
+
+```powershell
+.\venv\Scripts\python.exe -m ml.training.export_lstm_tflite
+.\venv\Scripts\python.exe -m ml.training.benchmark_lstm_tflite
+```
+
+The first command writes `ml/models/trained/lstm_energy_forecast.tflite` and `lstm_energy_forecast.q8.tflite`. The second prints the benchmark table below.
+
+### Benchmark — measured on the dev machine
+
+50 runs (5 warmup discarded), 1×24×1 input tensor:
+
+| Variant | On-disk size | Single-step latency | 24-step forecast | Pred error vs Keras |
+|---|---:|---:|---:|---:|
+| Keras (`.keras`) | 378.0 KB | 57.3 ms | 1354.6 ms | — (baseline) |
+| **TFLite float32** | **132.0 KB** (35% of Keras) | **1.17 ms** (49× faster) | **31.7 ms** (43× faster) | 0.0 (bit-exact) |
+| **TFLite INT8** (quant) | **48.2 KB** (12.7% of Keras) | **1.38 ms** (41× faster) | — | 9.84e-04 (~0.18%) |
+
+The huge per-call speedup is because Keras `model.predict()` carries significant Python and graph-execution overhead per invocation; `tf.lite.Interpreter.invoke()` runs the model directly. The same effect makes TFLite a great fit for IoT use, where each device runs many small inferences.
+
+### How to switch the backend to TFLite
+
+Add to your `.env`:
+
+```env
+LSTM_USE_TFLITE=true
+```
+
+[load_lstm_model](backend/ml/model_loaders.py) reads this flag at startup. When `true` and the `.tflite` artifact exists, it returns `LSTMTFLiteWrapper`; otherwise it falls back to the full-Keras wrapper. The prediction API and forecast UI don't change — same endpoints, same response shape.
+
+### The IoT story
+
+The 48 KB INT8 artifact + `tflite_runtime` (a ~2 MB Python wheel, no TensorFlow) can be dropped onto:
+- A Raspberry Pi 4 next to the building's smart meter, running predictions locally
+- A smart-meter gateway, where bandwidth back to the cloud is expensive
+- A mobile app, for site-engineer dry-runs without internet
+
+In each case the *same* trained model — produced by the same training pipeline — handles inference. That is why TFLite earns its place in the brief.
+
+### Caveats
+
+- The LSTM conversion needs `tf.lite.OpsSet.SELECT_TF_OPS` (the "Flex" delegate) because TFLite's pure builtin op set doesn't cover every Keras LSTM internal. This adds a small runtime dependency on TF op support. Pure-CMSIS-NN microcontroller deployment would require a slightly different model architecture (e.g., a smaller GRU or a CNN forecaster) — out of scope for this project but a clean follow-up.
+- INT8 dynamic-range quantization adds <0.2% absolute error on this dataset, which is well within the noise floor of the underlying signal.
+
+## Reports
+
+The brief lists *"Dashboard with charts, reports, and alerts."* Charts live in the analytics pages, alerts in the alerts page — this section covers reports: a single, shareable PDF document plus a raw CSV export.
+
+### What the PDF report contains
+
+Generated server-side by [backend/services/report_service.py](backend/services/report_service.py) using [reportlab](https://www.reportlab.com/) for layout and matplotlib for the embedded charts. Everything is rendered to in-memory PNG bytes and inlined into the PDF — no temp files on disk.
+
+| Section | Source |
+|---|---|
+| Executive summary (total kWh, est. cost, avg daily, peak) | `analytics_service.get_summary` |
+| Period comparison vs previous window of equal length | `analytics_service.compare_periods` |
+| Consumption trend chart (daily for ≥ 2-day windows, hourly otherwise) | `analytics_service.get_data_range` + matplotlib |
+| Hourly profile (average consumption by hour-of-day) | direct SQL on `energy_readings` + matplotlib |
+| Statistical outliers (`|z-score| > 2`, top 10 by magnitude) | direct SQL using `avg` + `stddev_samp` |
+| Optimization recommendations table | `optimization_service.generate_report` |
+
+The report is branded (teal accent), paginated with a footer (`Generated YYYY-MM-DD HH:MM UTC · Page N`), and named `enersight-report-<start>_to_<end>.pdf` via `Content-Disposition`. A local sample sits in `logs/sample_report.pdf` after running the smoke test.
+
+### CSV export
+
+`GET /api/v1/reports/period.csv?days=30` (or with explicit `start`/`end` and optional `aggregation=hour|day|week|month|year`) returns the raw reading-level data, suitable for spreadsheet analysis. Backed by the existing `analytics_service.export_to_csv`.
+
+### Frontend
+
+[frontend/src/app/(app)/reports/page.tsx](frontend/src/app/(app)/reports/page.tsx) is a server component listing what's included; the actual download is handled by the client component [download-buttons.tsx](frontend/src/app/(app)/reports/download-buttons.tsx), which:
+1. Reads the Supabase access token from the browser client
+2. Calls the backend with `Authorization: Bearer <token>`
+3. Streams the response as a `Blob`, builds an object URL, and triggers a download with the filename from `Content-Disposition`
+
+Period length is controlled by [period-selector.tsx](frontend/src/app/(app)/reports/period-selector.tsx) (7 / 14 / 30 / 90 / 180 / 365 days), persisted in the URL search params so deep links work.
+
+### Why server-side PDF (and not browser print-to-PDF)?
+
+- **Deterministic output** — the PDF looks the same on any client. Browser print depends on user-installed fonts, zoom, and headless-Chrome flags.
+- **No JS runtime needed** — the report can run from a cron job, an email digest, or an API integration with no browser. Browser-print only works in front of a user.
+- **Smaller deploy** — `reportlab` is a pure-Python wheel. Headless Chromium adds 200 MB+ to the container.
+
+## Optimization Recommendations
+
+Anomaly detection tells you *something is wrong*. Optimization recommendations tell you *what to do about it*. The `/api/v1/optimizations/` endpoint runs a small, explainable rules engine over recent `energy_readings` and returns a ranked list of concrete actions with projected monthly savings (kWh and USD).
+
+### Architecture
+
+- **Schemas**: [backend/schemas/optimization.py](backend/schemas/optimization.py) defines `Recommendation` and `OptimizationReport`.
+- **Service**: [backend/services/optimization_service.py](backend/services/optimization_service.py) holds the rules engine. Each rule is a method on `OptimizationService` that takes a SQLAlchemy session, a `[start, end)` window, and the cost per kWh, and returns `Optional[Recommendation]`. Silence is meaningful — a rule returning `None` means "this pattern wasn't detected, no recommendation needed."
+- **API route**: [backend/api/v1/optimizations.py](backend/api/v1/optimizations.py) exposes the report.
+- **Frontend**: [frontend/src/app/(app)/optimizations/page.tsx](frontend/src/app/(app)/optimizations/page.tsx) renders each recommendation as a card with severity, category icon, projected monthly savings, supporting metrics, and a concrete suggested action.
+
+### Rules currently implemented
+
+| Rule id | What it detects | Suggested action |
+|---|---|---|
+| `hvac_when_empty` | HVAC active during readings with `occupancy = 0` | Tie HVAC schedule to occupancy / wider deadband when unoccupied |
+| `lights_when_empty` | Lighting active during readings with `occupancy = 0` | Install PIR motion sensors and after-hours shutdown schedules |
+| `underused_renewable` | Renewable output above-average while grid consumption stays above-average | Shift flexible loads (water heating, EV charging, batch jobs) into the renewable-production window |
+| `weekend_phantom_load` | Weekend minimum consumption exceeds weekday minimum | Audit always-on equipment (servers, fume hoods, vending) and add scheduled shutdowns |
+
+### Recommendation payload
+
+Each recommendation includes:
+- `title`, `category` (hvac / lighting / renewable / baseline / scheduling), `severity` (info / warning / critical)
+- `description` — what was observed, with the supporting numbers inlined
+- `suggestion` — concrete action the operator can take
+- `estimated_savings_kwh` and `estimated_savings_usd` — projected to a **monthly** horizon so recommendations from different window sizes can be compared
+- `confidence` (0-1) — saturating function of sample size, so a 5-sample finding gets a different weight than a 500-sample one
+- `supporting_metrics` — the raw numbers used to derive the recommendation, exposed for transparency
+
+The report is sorted by projected USD savings, so the most impactful action is always at the top.
+
+### Why a rules engine (not an ML model)?
+
+For "suggest optimizations" the rules engine wins on three axes:
+1. **Explainability** — each recommendation comes with the exact numbers that triggered it. An ML model would produce a score with no actionable reason.
+2. **Cold-start** — works on day one with no training data, which matters because optimization opportunities are most valuable to surface *early*.
+3. **Operator trust** — energy engineers can read the rule, agree or disagree, and tune thresholds. ML black boxes are routinely ignored in industrial settings for exactly this reason.
+
+The anomaly detector (Isolation Forest) is still where ML earns its keep — it finds *unknown* unknowns. The rules engine encodes *known* unknowns. The two are complementary.
+
+## Time-Series Storage
+
+The `energy_readings` table is a **declaratively partitioned Postgres table**, managed by [`pg_partman`](https://github.com/pgpartman/pg_partman) and maintained nightly by [`pg_cron`](https://github.com/citusdata/pg_cron). This is the Postgres-native time-series setup used when TimescaleDB is not available on the managed platform (Supabase does not ship TimescaleDB for licensing reasons).
+
+### Design
+
+- **Partition strategy**: `RANGE (recorded_at)`, **monthly** partitions
+- **Composite primary key**: `(id, recorded_at)` — Postgres requires the partition key to be part of every unique constraint on a partitioned table
+- **Default partition**: catch-all for any row that doesn't match an existing range (acts as a safety net)
+- **Indexes propagate to children**: `recorded_at DESC`, `(device_id, recorded_at DESC)`, `(location, recorded_at DESC)` are declared once on the parent and Postgres creates matching local indexes on every partition
+- **Row Level Security**: preserved on the parent table; policies apply uniformly across all partitions
+
+### Automation
+
+`pg_partman` is configured to:
+
+| Setting | Value | Effect |
+|---|---|---|
+| `partition_interval` | `1 month` | one child partition per calendar month |
+| `premake` | `6` | always keep 6 future partitions ready |
+| `retention` | `12 months` | drop partitions older than 12 months |
+| `retention_keep_table` | `false` | retention drops the underlying table outright (fast) |
+| `infinite_time_partitions` | `true` | maintenance keeps creating future partitions indefinitely |
+| `automatic_maintenance` | `on` | partition creation/drop happens via the maintenance proc |
+
+A `pg_cron` job named `partman-maintenance` runs every night at **02:00 UTC** and calls `partman.run_maintenance_proc()`. This is what creates next month's partition before any data needs it, and drops year-old partitions when they age out.
+
+### Why this matters
+
+- **Partition pruning** — time-bounded queries (the dominant access pattern for the dashboard, analytics, and ML training pipelines) scan only the relevant month's partition instead of the full table. Verified with `EXPLAIN`: a `WHERE recorded_at >= '...' AND recorded_at < '...'` plan touches a single child partition.
+- **Bounded index size** — every index is local to one partition, so write performance stays flat as the time-series grows. With a single-table design, indexes grow linearly with row count and INSERTs slow over time.
+- **Instant retention drops** — `DROP TABLE` on an old partition is O(1). Deleting old rows from a non-partitioned table would scan and rewrite indexes; partitioned drops don't touch the surviving data at all.
+- **Operationally hands-off** — partition creation and pruning are scheduled inside the database itself, with no application-level cron, no external scheduler, and no Docker container to babysit.
+
+### Files involved
+
+- Migration: `partition_energy_readings_by_month` (Supabase migrations)
+- Cron job: `partman-maintenance` in `cron.job`
+- Configuration row: `partman.part_config` where `parent_table = 'public.energy_readings'`
+
+### Schema trade-off
+
+The previous foreign key `anomalies.reading_id → energy_readings.id` was removed during the migration. Postgres requires FKs into partitioned tables to reference the **full** primary key, which is now composite `(id, recorded_at)`. The reference is now a soft pointer — `anomalies` was empty at migration time so no data was affected, and this is the standard pattern for anomaly/event tables that point at time-series readings. To restore strict integrity in the future, add `recorded_at` to `anomalies` and recreate the FK as composite.
 
 ## ML Models
 

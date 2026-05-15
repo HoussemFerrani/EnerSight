@@ -11,10 +11,12 @@ from typing import Any
 import tensorflow as tf
 from tensorflow import keras
 
+from backend.core.config import get_settings
 from backend.core.logging import get_logger
 from backend.ml.model_wrappers import (
     RegressionModelWrapper,
     LSTMModelWrapper,
+    LSTMTFLiteWrapper,
     AnomalyDetectorWrapper,
 )
 
@@ -68,42 +70,42 @@ def load_regression_model(model_name: str = "random_forest") -> RegressionModelW
     return RegressionModelWrapper(model_data)
 
 
-def load_lstm_model() -> LSTMModelWrapper:
+def load_lstm_model():
     """
-    Load trained LSTM model and its scaler
-    
-    Returns:
-        Wrapped LSTM model with forecast_future() method
-    
+    Load the trained LSTM model and its scaler.
+
+    Returns a wrapper exposing `forecast_future(historical_data, steps_ahead)`.
+    When `LSTM_USE_TFLITE=true` (env var) AND the `.tflite` artifact exists,
+    we return a `LSTMTFLiteWrapper` that runs inference through
+    `tf.lite.Interpreter` — same interface, smaller artifact, edge-deployable.
+    Otherwise we fall back to the full-Keras `LSTMModelWrapper`.
+
     Raises:
-        FileNotFoundError: If model or scaler file doesn't exist
+        FileNotFoundError: If the required artifacts don't exist.
     """
+    settings = get_settings()
     models_dir = get_models_dir()
-    
-    model_path = models_dir / "lstm_energy_forecast.keras"
+
     scaler_path = models_dir / "lstm_energy_forecast_scaler.joblib"
-    
-    if not model_path.exists():
-        raise FileNotFoundError(f"LSTM model file not found: {model_path}")
-    
     if not scaler_path.exists():
         raise FileNotFoundError(f"LSTM scaler file not found: {scaler_path}")
-    
-    logger.info(f"Loading LSTM model from {model_path}")
-    model = keras.models.load_model(model_path)
-    
+
+    tflite_path = models_dir / settings.model_lstm_tflite
+    if settings.lstm_use_tflite and tflite_path.exists():
+        logger.info(f"Loading LSTM (TFLite) from {tflite_path}")
+        scaler = joblib.load(scaler_path)
+        return LSTMTFLiteWrapper({"tflite_path": tflite_path, "scaler": scaler})
+
+    keras_path = models_dir / settings.model_lstm
+    if not keras_path.exists():
+        raise FileNotFoundError(f"LSTM model file not found: {keras_path}")
+
+    logger.info(f"Loading LSTM (Keras) from {keras_path}")
+    model = keras.models.load_model(keras_path)
     logger.info(f"Loading LSTM scaler from {scaler_path}")
     scaler = joblib.load(scaler_path)
-    
-    logger.info("LSTM model and scaler loaded successfully")
-    
-    model_data = {
-        "model": model,
-        "scaler": scaler,
-    }
-    
-    # Wrap model for consistent API
-    return LSTMModelWrapper(model_data)
+
+    return LSTMModelWrapper({"model": model, "scaler": scaler})
 
 
 def load_anomaly_detector() -> AnomalyDetectorWrapper:

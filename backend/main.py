@@ -253,7 +253,7 @@ async def api_info():
 # ==================== API Routers ====================
 
 from backend.api.routes import energy, predictions, anomalies
-from backend.api.v1 import websocket, users, auth, alerts, analytics_enhanced
+from backend.api.v1 import websocket, users, auth, alerts, analytics_enhanced, optimizations, reports
 
 app.include_router(
     energy.router,
@@ -306,6 +306,20 @@ app.include_router(
     analytics_enhanced.router,
     prefix="/api/v1/analytics",
     tags=["Enhanced Analytics"]
+)
+
+# Optimization recommendations
+app.include_router(
+    optimizations.router,
+    prefix="/api/v1/optimizations",
+    tags=["Optimizations"]
+)
+
+# Reports (PDF + CSV)
+app.include_router(
+    reports.router,
+    prefix="/api/v1/reports",
+    tags=["Reports"]
 )
 
 

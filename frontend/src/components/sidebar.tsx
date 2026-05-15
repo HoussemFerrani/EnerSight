@@ -9,8 +9,10 @@ import {
   Bell,
   Bolt,
   Brain,
+  FileText,
   LayoutDashboard,
   LogOut,
+  Sparkles,
 } from "lucide-react"
 
 import { signOut } from "@/app/login/actions"
@@ -25,6 +27,8 @@ const NAV = [
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/predictions", label: "Predictions", icon: Brain },
   { href: "/anomalies", label: "Anomalies", icon: AlertTriangle },
+  { href: "/optimizations", label: "Optimizations", icon: Sparkles },
+  { href: "/reports", label: "Reports", icon: FileText },
   { href: "/alerts", label: "Alerts", icon: Bell },
 ]
 

@@ -90,7 +90,18 @@ class Settings(BaseSettings):
     )
     model_lstm: str = Field(
         default="lstm_energy_forecast.keras",
-        description="LSTM model filename"
+        description="LSTM model filename (Keras)"
+    )
+    model_lstm_tflite: str = Field(
+        default="lstm_energy_forecast.tflite",
+        description="LSTM model filename (TFLite, used when lstm_use_tflite is true)"
+    )
+    lstm_use_tflite: bool = Field(
+        default=False,
+        description=(
+            "If true and the .tflite artifact exists, run LSTM inference through "
+            "tf.lite.Interpreter instead of full Keras. Smaller model + edge-deployable."
+        ),
     )
     model_anomaly: str = Field(
         default="anomaly_detector.joblib",

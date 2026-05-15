@@ -155,6 +155,72 @@ class LSTMModelWrapper:
         return forecast
 
 
+class LSTMTFLiteWrapper:
+    """
+    Drop-in replacement for `LSTMModelWrapper` that runs inference through
+    `tf.lite.Interpreter` instead of full Keras.
+
+    Why: the .tflite flatbuffer is ~8x smaller than the .keras directory and
+    can run on edge devices (Raspberry Pi, ESP32-class boards, smart-meter
+    gateways) under the standalone `tflite_runtime` package — no full
+    TensorFlow needed. The dashboard and prediction API don't change; this
+    class exposes the same `forecast_future()` signature so swapping is a
+    no-op for callers.
+    """
+
+    def __init__(self, loaded_model_data: Dict[str, Any]):
+        import tensorflow as tf  # local import: TF is a heavy dependency
+
+        tflite_path = loaded_model_data["tflite_path"]
+        self.scaler = loaded_model_data["scaler"]
+        self.sequence_length = 24  # must match the Keras training config
+
+        # An interpreter is cheap to keep alive; tensor buffers are allocated
+        # once and reused across invocations.
+        self.interpreter = tf.lite.Interpreter(model_path=str(tflite_path))
+        self.interpreter.allocate_tensors()
+        self._input_idx = self.interpreter.get_input_details()[0]["index"]
+        self._output_idx = self.interpreter.get_output_details()[0]["index"]
+
+        logger.info(f"Initialized LSTM TFLite wrapper from {tflite_path}")
+
+    def _predict_one(self, sequence: np.ndarray) -> float:
+        """Run one forward pass through the TFLite interpreter."""
+        x = sequence.reshape(1, self.sequence_length, 1).astype(np.float32)
+        self.interpreter.set_tensor(self._input_idx, x)
+        self.interpreter.invoke()
+        return float(self.interpreter.get_tensor(self._output_idx)[0, 0])
+
+    def forecast_future(
+        self,
+        historical_data: Union[List[float], np.ndarray],
+        steps_ahead: int = 24,
+    ) -> List[float]:
+        """Same contract as `LSTMModelWrapper.forecast_future`."""
+        if len(historical_data) < self.sequence_length:
+            raise ValueError(
+                f"Need at least {self.sequence_length} historical values, "
+                f"got {len(historical_data)}"
+            )
+
+        recent = np.asarray(historical_data[-self.sequence_length:], dtype=np.float64)
+        scaled = self.scaler.transform(recent.reshape(-1, 1))
+        current_sequence = scaled[-self.sequence_length:].reshape(self.sequence_length, 1)
+
+        forecast: List[float] = []
+        for _ in range(steps_ahead):
+            next_scaled = self._predict_one(current_sequence)
+            next_value = float(self.scaler.inverse_transform([[next_scaled]])[0, 0])
+            forecast.append(next_value)
+            current_sequence = np.concatenate(
+                [current_sequence[1:], np.array([[next_scaled]], dtype=np.float64)],
+                axis=0,
+            )
+
+        logger.debug(f"Generated TFLite forecast for {steps_ahead} steps")
+        return forecast
+
+
 class AnomalyDetectorWrapper:
     """
     Wrapper for loaded anomaly detector
