@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(venv/Scripts/python.exe ml/training/train_models.py)",
+      "Bash(venv/Scripts/python.exe -m ml.training.train_models)",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe -m ml.training.train_models)",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe -m ml.evaluation.evaluate)",
+      "Bash(npx --no-install tsc --noEmit -p .)",
+      "Bash(grep -E \"\\(accuracy-chart|app\\\\\\)\\\\\\\\\\\\\\\\page|api/v1/ml\\)\")",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe -m backend.migrations.create_prediction_log_table)",
+      "Bash(grep -E \"\\(drift-chart|app\\\\\\)\\\\\\\\\\\\\\\\page\\)\")",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe -c \"from backend.api.v1 import ml; from backend.services.energy_service import EnergyService; from backend.repositories.prediction_log_repository import PredictionLogRepository; print\\('OK imports clean'\\)\")",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe -c \"from backend.api.v1 import ml; from backend.services.energy_service import EnergyService; from backend.ml.model_version import get_model_version; from backend.api.models.predictions import PredictionRequest; print\\('OK imports clean'\\); print\\('regression version:', get_model_version\\('regression_random_forest'\\)\\)\")",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe -c \"from backend.main import app; print\\('OK main imports clean'\\); from backend.ml.model_version import get_model_version; print\\('regression version:', get_model_version\\('regression_random_forest'\\)\\)\")",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe -m ml.training.train_models --models anomaly)",
+      "Bash(grep -E \"\\(app\\\\\\)\\\\\\\\\\\\\\\\page|accuracy-chart|drift-chart\\)\")",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe -c \"import json; data = json.load\\(open\\('ml/models/trained/evaluation.json'\\)\\); import pprint; pprint.pprint\\(data['anomaly']\\)\")",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe -c \"from backend.main import app; print\\('OK, ml router routes:'\\); [print\\(' ', r.path\\) for r in app.routes if '/ml/' in r.path]\")",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe -c \"from backend.main import app; print\\('Backend OK. /ml routes:'\\); [print\\(' ', r.path\\) for r in app.routes if '/ml/' in r.path]\")",
+      "PowerShell(.\\\\venv\\\\Scripts\\\\python.exe -m uvicorn backend.main:app --reload --port 8000 --host 0.0.0.0)",
+      "PowerShell(npm --prefix frontend run dev)"
+    ]
+  }
+}

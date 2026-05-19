@@ -51,6 +51,7 @@ async def predict_consumption(
             lighting_usage=data.lighting_usage,
             equipment_usage=data.equipment_usage,
             renewable_energy=data.renewable_energy,
+            for_timestamp=data.for_timestamp,
         )
         return result
     

@@ -214,8 +214,10 @@ async def get_energy_service(
     FastAPI resolves the session via `Depends(get_postgres_session)`.
     """
     from backend.repositories.energy_repository import EnergyDataRepository
+    from backend.repositories.prediction_log_repository import PredictionLogRepository
 
     repository = EnergyDataRepository(session=session)
+    prediction_log_repository = PredictionLogRepository(session=session)
 
     model_registry = get_model_registry()
     try:
@@ -239,6 +241,7 @@ async def get_energy_service(
         regression_model=regression_model,
         lstm_model=lstm_model,
         anomaly_detector=anomaly_detector,
+        prediction_log_repository=prediction_log_repository,
     )
 
 

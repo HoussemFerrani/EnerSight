@@ -9,10 +9,12 @@ Service Layer Benefits:
 - Transaction management
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 
+from backend.ml.model_version import get_model_version
 from backend.repositories.energy_repository import EnergyDataRepository
+from backend.repositories.prediction_log_repository import PredictionLogRepository
 from backend.core.logging import get_logger
 from backend.core.exceptions import (
     ValidationError,
@@ -37,20 +39,23 @@ class EnergyService:
         regression_model: Any = None,
         lstm_model: Any = None,
         anomaly_detector: Any = None,
+        prediction_log_repository: Optional[PredictionLogRepository] = None,
     ):
         """
         Initialize energy service with dependencies
-        
+
         Args:
             energy_repository: Repository for energy data access (optional)
             regression_model: ML model for regression predictions
             lstm_model: LSTM model for time-series forecasting
             anomaly_detector: Model for anomaly detection
+            prediction_log_repository: Optional sink for live drift monitoring
         """
         self.repository = energy_repository
         self.regression_model = regression_model
         self.lstm_model = lstm_model
         self.anomaly_detector = anomaly_detector
+        self.prediction_log_repository = prediction_log_repository
     
     async def record_energy_reading(
         self,
@@ -220,23 +225,28 @@ class EnergyService:
         lighting_usage: float,
         equipment_usage: float,
         renewable_energy: float,
+        for_timestamp: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
         Predict energy consumption using ML model
-        
+
         Args:
             Features for prediction
-        
+            for_timestamp: Wall-clock time the prediction is *about*. Defaults
+                to now. Set this when calling predict against historical or
+                future sensor readings so the backfill job can match the right
+                energy_readings row.
+
         Returns:
             Prediction result with confidence
-        
+
         Raises:
             PredictionError: If prediction fails
             MLException: If model not loaded
         """
         if not self.regression_model:
             raise MLException("Regression model not loaded")
-        
+
         try:
             # Prepare features
             features = {
@@ -248,19 +258,31 @@ class EnergyService:
                 "EquipmentUsage": equipment_usage,
                 "RenewableEnergy": renewable_energy,
             }
-            
+
             # Make prediction
             prediction = self.regression_model.predict(features)
-            
+
             logger.info(f"Predicted consumption: {prediction:.2f} kWh")
-            
+
+            # Best-effort log for drift monitoring. Never block the response on
+            # a log-write failure — production monitoring is non-critical.
+            target_at = for_timestamp or datetime.now(timezone.utc)
+            await self._safe_log_prediction(
+                prediction_type="predict",
+                model_name="Random Forest",
+                model_version_key="regression_random_forest",
+                predicted_value=float(prediction),
+                target_at=target_at,
+                features=features,
+            )
+
             return {
                 "predicted_consumption": round(prediction, 2),
                 "model": "Random Forest",
                 "confidence": 0.85,  # TODO: Calculate actual confidence
                 "features": features,
             }
-        
+
         except Exception as e:
             logger.error(f"Prediction failed: {e}")
             raise PredictionError(f"Failed to predict consumption: {str(e)}")
@@ -289,15 +311,23 @@ class EnergyService:
                 historical_data,
                 steps_ahead=forecast_hours
             )
-            
+
             logger.info(f"Generated {forecast_hours}h forecast")
-            
+
+            # Log each forecasted hour with its target timestamp so backfill
+            # can match against future energy_readings rows.
+            now = datetime.now(timezone.utc)
+            await self._safe_log_forecast(
+                forecast_values=forecast,
+                base_at=now,
+            )
+
             return {
                 "forecast": [round(val, 2) for val in forecast],
                 "forecast_hours": forecast_hours,
                 "model": "LSTM",
             }
-        
+
         except Exception as e:
             logger.error(f"Forecasting failed: {e}")
             raise PredictionError(f"Failed to forecast: {str(e)}")
@@ -415,7 +445,53 @@ class EnergyService:
         }
     
     # ==================== Private Helper Methods ====================
-    
+
+    async def _safe_log_prediction(
+        self,
+        *,
+        prediction_type: str,
+        model_name: str,
+        predicted_value: float,
+        target_at: datetime,
+        features: Dict[str, Any],
+        model_version_key: str,
+    ) -> None:
+        """Log a prediction without ever raising — drift logging must not break
+        the user-facing endpoint if the DB is briefly unhappy."""
+        if not self.prediction_log_repository:
+            return
+        try:
+            await self.prediction_log_repository.record(
+                prediction_type=prediction_type,
+                model_name=model_name,
+                model_version=get_model_version(model_version_key),
+                predicted_value=predicted_value,
+                target_at=target_at,
+                features=features,
+            )
+        except Exception as e:
+            logger.warning(f"Prediction log write failed (non-fatal): {e}")
+
+    async def _safe_log_forecast(self, *, forecast_values: List[float], base_at: datetime) -> None:
+        if not self.prediction_log_repository:
+            return
+        try:
+            version = get_model_version("lstm")
+            rows = [
+                {
+                    "prediction_type": "forecast",
+                    "model_name": "LSTM",
+                    "model_version": version,
+                    "predicted_value": float(v),
+                    "target_at": base_at + timedelta(hours=i + 1),
+                    "features": {"step_ahead_hours": i + 1},
+                }
+                for i, v in enumerate(forecast_values)
+            ]
+            await self.prediction_log_repository.record_many(rows)
+        except Exception as e:
+            logger.warning(f"Forecast log write failed (non-fatal): {e}")
+
     def _validate_reading_inputs(
         self,
         temperature: float,

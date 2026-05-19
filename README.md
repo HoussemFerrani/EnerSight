@@ -17,6 +17,7 @@ EnerSight monitors, analyzes, and optimizes building energy consumption using Io
 - **Real-time monitoring** — live energy consumption tracking
 - **ML predictions** — Random Forest, Gradient Boosting, and LSTM
 - **Anomaly detection** — Isolation Forest with explanations
+- **Model accuracy & drift monitoring** — training-time metrics, k-fold cross-validation, predicted-vs-actual charts, and live drift backfilled in-database via pg_cron (see [Model Accuracy & Drift Monitoring](#model-accuracy--drift-monitoring))
 - **Optimization recommendations** — rules engine that suggests concrete actions to reduce waste, with projected monthly savings (see [Optimization Recommendations](#optimization-recommendations))
 - **Reports** — downloadable PDF period reports + CSV export of raw readings (see [Reports](#reports))
 - **Edge-deployable ML** — the LSTM forecaster has a TensorFlow Lite variant (~8× smaller, ~49× faster on CPU); see [TensorFlow Lite Inference](#tensorflow-lite-inference)
@@ -65,7 +66,8 @@ EnerSight/
 │   │   └── services/       # supabaseClient, api, alertService, ...
 ├── ml/                     # ML models
 │   ├── models/             # Regression / LSTM / Anomaly classes
-│   └── training/           # Training pipelines
+│   ├── training/           # Training pipelines (+ TFLite export, benchmark)
+│   └── evaluation/         # K-fold CV + anomaly P/R evaluation script
 ├── data/raw/               # Source CSV(s) (ignored by git)
 ├── render.yaml             # Render deployment (backend only)
 ├── start.ps1               # One-shot local launcher (Windows)
@@ -132,8 +134,17 @@ This launches:
 - `POST /api/v1/energy/readings` — submit a reading
 
 ### Predictions
-- `POST /api/v1/predictions/predict` — single prediction
+- `POST /api/v1/predictions/predict` — single prediction (optional `for_timestamp` ISO-8601 to anchor the prediction for drift backfill)
 - `POST /api/v1/predictions/forecast` — forecast horizon
+
+### ML Monitoring (auth required)
+- `GET /api/v1/ml/metrics` — training-time RMSE/MAE/R²/MAPE/Accuracy per model
+- `GET /api/v1/ml/evaluation` — 5-fold cross-validation results + anomaly precision/recall/F1
+- `GET /api/v1/ml/predictions` — sampled predicted-vs-actual series for the chart
+- `GET /api/v1/ml/drift/summary` — live counters (total / backfilled / pending / live accuracy)
+- `GET /api/v1/ml/drift?hours=168&bucket=hour` — bucketed MAPE-over-time series
+- `POST /api/v1/ml/backfill?limit=500` — fill in `actual_value` for past predictions (also runs automatically every 15 min via `pg_cron`)
+- `GET /api/v1/ml/log?limit=50` — recent prediction log entries (debugging)
 
 ### Anomalies
 - `GET /api/v1/anomalies/detect` — run detection
@@ -356,10 +367,96 @@ The previous foreign key `anomalies.reading_id → energy_readings.id` was remov
 - **LSTM** — sequential forecasting (`ml/models/lstm_model.py`)
 - **Isolation Forest** — anomaly detection (`ml/models/anomaly_detector.py`)
 
-Trained artifacts live in `ml/models/trained/`. Retrain locally via:
+Trained artifacts live in `ml/models/trained/`. Retrain all models + persist evaluation metrics via:
+
 ```powershell
-.\venv\Scripts\python.exe -c "from ml.models.regression_model import train_regression_model; train_regression_model('data/raw/Energy_consumption.csv', 'random_forest')"
+.\venv\Scripts\python.exe -m ml.training.train_models
 ```
+
+The `regression_random_forest` variant also supports `include_lag_features=True`, which adds lag (1h, 24h, 168h) and 24h rolling-mean features over `EnergyConsumption`. Lagged variants use a time-based train/test split to avoid look-ahead leakage. They are trained side-by-side with the baseline as a benchmark; the `/predict` endpoint always uses the baseline so single-shot calls (which have no history context) don't degrade.
+
+## Model Accuracy & Drift Monitoring
+
+The platform answers three distinct questions about model quality, each with a different mechanism:
+
+| Question | Mechanism | Where it shows |
+|---|---|---|
+| *How accurate is the model on the test set?* | Training-time metrics: RMSE, MAE, R², MAPE, Accuracy% | "Model accuracy" card on the dashboard, [/api/v1/ml/metrics](#ml-monitoring-auth-required) |
+| *Is that accuracy stable, or did we get lucky on one split?* | 5-fold cross-validation with mean ± std per fold | "Cross-validation stability" card, [/api/v1/ml/evaluation](#ml-monitoring-auth-required) |
+| *Where does the model fail?* | Sampled predicted-vs-actual series (chronological held-out tail) | "Predicted vs actual" chart |
+| *Is the anomaly detector catching the right things?* | Precision / Recall / F1 vs pseudo-labels from the existing business rules | "Anomaly detector quality" card |
+| *How is the live model performing in production right now?* | `ml_prediction_log` table + scheduled backfill + bucketed MAPE | "Live drift monitoring" card, [/api/v1/ml/drift](#ml-monitoring-auth-required) |
+
+### Layer 1 — Training-time metrics
+
+`python -m ml.training.train_models` writes [ml/models/trained/metrics.json](ml/models/trained/metrics.json) containing per-model RMSE, MAE, R², MAPE, and Accuracy (= 100% − MAPE). Random Forest and Gradient Boosting are each trained twice — baseline (no lag features) and lagged — so the impact of lag features is visible side-by-side. The LSTM section also re-evaluates on the original kWh scale so MAPE is comparable across models.
+
+### Layer 2 — Cross-validation & evaluation
+
+`python -m ml.evaluation.evaluate` loads the saved artifacts (no retraining) and produces:
+
+- **5-fold CV** for all regression variants. Reports mean ± std for RMSE/MAE/MAPE/R²/Accuracy. Shuffled folds for baseline, time-ordered folds for lagged (lag features leak under shuffle).
+- **Predicted-vs-actual sample** (≤ 200 points) for each regression variant, taken from the chronological 20% tail. Used by the dashboard chart.
+- **Anomaly precision/recall/F1** vs **rule-based pseudo-labels** derived from the same business heuristics in `AnomalyDetector._determine_anomaly_reason`. This measures *agreement with the rules*, not absolute accuracy — for that you need a human-labelled dataset. Surfaced honestly in the UI as a caveat.
+
+Outputs land in [ml/models/trained/evaluation.json](ml/models/trained/evaluation.json) and [ml/models/trained/predictions.json](ml/models/trained/predictions.json).
+
+### Layer 3 — Live drift monitoring
+
+Every call to `/api/v1/predictions/predict` and `/api/v1/predictions/forecast` is logged to `public.ml_prediction_log` with:
+
+| Column | Purpose |
+|---|---|
+| `target_at` | Wall-clock time the prediction is *about*. For `/predict` defaults to `now` (override via the new `for_timestamp` request field). For `/forecast` step `h`, it's `now + h hours`. |
+| `model_name`, `model_version` | `model_version` is derived from the trained-model file's mtime (`backend/ml/model_version.py`). Lets you slice drift by retrained model. |
+| `features` | JSONB snapshot of the input — kept for post-hoc debugging. |
+| `predicted_value` | What the model returned. |
+| `actual_value`, `error`, `abs_pct_error`, `backfilled_at` | Filled in by the backfill once a matching `energy_readings` row exists. |
+
+Logging is **non-blocking** — `_safe_log_*` helpers in [backend/services/energy_service.py](backend/services/energy_service.py) swallow log-write failures so a DB hiccup never breaks the user-facing endpoint.
+
+**Backfill** is a Postgres function `public.ml_backfill_predictions(p_limit INT)` that joins pending log rows against `energy_readings` within ±5 minutes of `target_at` and updates `actual_value`/`error`/`abs_pct_error`. Same logic in SQL is 10× faster than going through the HTTP endpoint and avoids round-trip overhead. The function is `SECURITY DEFINER`, `REVOKE`d from `anon`/`authenticated`, granted only to `service_role`.
+
+**Schedule**: a `pg_cron` job `ml_backfill_predictions_every_15m` runs `SELECT public.ml_backfill_predictions(1000)` every 15 minutes — fully in-database, no application cron required. The HTTP endpoint `POST /api/v1/ml/backfill` is kept for manual triggering.
+
+**Dashboard card**: shows total / backfilled / pending counters, the live accuracy %, and a MAPE-over-time line chart with a dashed reference line at the training-time MAPE — when the live line stays above the reference, the model has drifted and needs retraining.
+
+### Migrations involved
+
+- `add_model_version_to_prediction_log` — adds `model_version TEXT` + index to `ml_prediction_log`
+- `create_ml_backfill_function_and_cron` — creates the SQL function and pg_cron job (idempotent)
+- `enable_rls_on_data_tables` — see the [Security](#security) section below
+- Python migration script: [backend/migrations/create_prediction_log_table.py](backend/migrations/create_prediction_log_table.py) creates the table initially
+
+### Re-running the whole pipeline
+
+```powershell
+# Layer 1 — train + persist training metrics
+.\venv\Scripts\python.exe -m ml.training.train_models
+
+# Layer 2 — run CV + anomaly P/R + predicted-vs-actual sampling
+.\venv\Scripts\python.exe -m ml.evaluation.evaluate
+```
+
+Layer 3 backfill is automatic. To force a backfill manually:
+
+```bash
+curl -X POST "https://<your-backend>/api/v1/ml/backfill?limit=1000" \
+     -H "Authorization: Bearer <supabase-access-token>"
+```
+
+## Security
+
+All `/api/v1/ml/*` endpoints are gated by `get_current_user` (Supabase Auth ES256 JWT). The dashboard's `backendFetch` helper forwards the access token automatically.
+
+### Row Level Security on data tables
+
+The migration [backend/migrations/enable_rls_on_data_tables.sql](backend/migrations/enable_rls_on_data_tables.sql) enables RLS on `ml_prediction_log` and every `energy_readings` partition with **no permissive policies** — i.e., a complete lockdown to anon and authenticated PostgREST clients. This is safe because:
+
+1. The FastAPI backend connects as the `postgres` user (superuser), which **bypasses RLS**.
+2. The frontend never queries these tables directly via `supabase-js` — all data flows through FastAPI.
+
+Result: Supabase's `rls_disabled_in_public` advisory drops from 12× **ERROR** to 0. The replacement `rls_enabled_no_policy` notices are **INFO**-level and expected (no policies = no anon access, which is the goal). If you ever want `supabase-js` to query these tables directly (e.g., realtime subscriptions), uncomment the policy template at the bottom of the migration file.
 
 ## Deployment
 

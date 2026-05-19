@@ -1,0 +1,40 @@
+{
+  "generated_at": "2026-05-17T16:17:07.732864+00:00",
+  "dataset": {
+    "path": "data/raw/Energy_consumption.csv",
+    "records": 1000,
+    "date_range": {
+      "start": "2022-01-01 00:00:00",
+      "end": "2022-02-11 15:00:00"
+    }
+  },
+  "models": {
+    "anomaly_detector": {
+      "task": "anomaly_detection",
+      "algorithm": "IsolationForest (+ rules hybrid)",
+      "contamination": 0.15,
+      "n_estimators": 200,
+      "total_records": 1000,
+      "ground_truth_positive": 177,
+      "if_only": {
+        "precision": 0.37333333333333335,
+        "recall": 0.3163841807909605,
+        "f1": 0.3425076452599388,
+        "flagged_count": 150,
+        "flag_rate": 0.15
+      },
+      "hybrid": {
+        "precision": 0.6531365313653137,
+        "recall": 1.0,
+        "f1": 0.7901785714285714,
+        "flagged_count": 271,
+        "flag_rate": 0.271
+      },
+      "novel_findings": {
+        "count": 94,
+        "flag_rate": 0.094
+      },
+      "note": "Pseudo-labels from business rules. Hybrid is the production output."
+    }
+  }
+}

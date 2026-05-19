@@ -3,8 +3,9 @@ Prediction Schemas
 Pydantic models for ML prediction requests and responses
 """
 
+from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 class PredictionRequest(BaseModel):
@@ -16,6 +17,14 @@ class PredictionRequest(BaseModel):
     lighting_usage: float = Field(..., ge=0, description="Lighting consumption in kWh")
     equipment_usage: float = Field(..., ge=0, description="Equipment consumption in kWh")
     renewable_energy: float = Field(..., ge=0, description="Renewable generation in kWh")
+    for_timestamp: Optional[datetime] = Field(
+        None,
+        description=(
+            "Wall-clock time the prediction is about (ISO-8601). Defaults to "
+            "now. Set this when predicting against historical sensor readings "
+            "so the drift backfill can match against the right energy_readings row."
+        ),
+    )
     
     class Config:
         json_schema_extra = {

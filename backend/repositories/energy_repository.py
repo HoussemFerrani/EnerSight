@@ -136,6 +136,7 @@ class EnergyDataRepository:
             rows = result.scalars().all()
             return [
                 {
+                    "id": r.id,
                     "time": r.recorded_at,
                     "consumption": r.consumption,
                     "temperature": r.temperature,
