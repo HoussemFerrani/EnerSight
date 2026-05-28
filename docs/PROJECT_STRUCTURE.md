@@ -1,3 +1,7 @@
+> ⚠️ **OUTDATED** — This document describes the pre-migration layout (InfluxDB client, Vite config, Docker dir). The current project uses **Supabase** instead of InfluxDB, **Next.js (App Router)** under `frontend/src/app/` instead of Vite, and has no Docker setup. See [README.md](../README.md#project-structure) for the current tree. Kept for historical context.
+
+---
+
 # EnerSight Project Structure
 
 This document explains the folder structure and purpose of each component.

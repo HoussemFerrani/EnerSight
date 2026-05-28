@@ -5,12 +5,13 @@ An IoT-style platform for real-time energy monitoring, predictive analytics, and
 ![Status](https://img.shields.io/badge/status-active-green)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109-green)
-![React](https://img.shields.io/badge/React-18.2-blue)
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+![React](https://img.shields.io/badge/React-19-blue)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres-3ECF8E)
 
 ## Overview
 
-EnerSight monitors, analyzes, and optimizes building energy consumption using IoT sensor data, machine learning, and real-time analytics. Backed by Supabase (Postgres + Auth) and a FastAPI + React stack.
+EnerSight monitors, analyzes, and optimizes building energy consumption using IoT sensor data, machine learning, and real-time analytics. Backed by Supabase (Postgres + Auth) and a FastAPI + Next.js stack.
 
 ## Features
 
@@ -21,7 +22,7 @@ EnerSight monitors, analyzes, and optimizes building energy consumption using Io
 - **Optimization recommendations** — rules engine that suggests concrete actions to reduce waste, with projected monthly savings (see [Optimization Recommendations](#optimization-recommendations))
 - **Reports** — downloadable PDF period reports + CSV export of raw readings (see [Reports](#reports))
 - **Edge-deployable ML** — the LSTM forecaster has a TensorFlow Lite variant (~8× smaller, ~49× faster on CPU); see [TensorFlow Lite Inference](#tensorflow-lite-inference)
-- **Interactive dashboards** — Recharts + Chart.js visualizations
+- **Interactive dashboards** — Recharts visualizations
 - **Authentication** — Supabase Auth (email/password, JWT)
 - **Alerts** — threshold breaches surface as per-user alerts
 
@@ -36,9 +37,10 @@ EnerSight monitors, analyzes, and optimizes building energy consumption using Io
 - scikit-learn / TensorFlow / Keras
 
 **Frontend**
-- React 18 + Vite
-- @supabase/supabase-js
-- Material UI, Recharts, Chart.js, Axios
+- Next.js 16 (App Router) + React 19 + TypeScript
+- @supabase/ssr + @supabase/supabase-js
+- Tailwind CSS 4, shadcn/ui, Base UI, lucide-react, sonner
+- Recharts, Axios
 
 **Data**
 - Supabase Postgres (auth, profiles, alerts, energy time-series, anomalies, predictions)
@@ -59,11 +61,11 @@ EnerSight/
 │   ├── services/           # Business logic
 │   ├── scripts/            # Data loader
 │   └── utils/              # JWT verification, helpers
-├── frontend/               # React + Vite app
+├── frontend/               # Next.js (App Router) app
 │   ├── src/
+│   │   ├── app/            # Routes: login, (app)/{dashboard,analytics,alerts,...}
 │   │   ├── components/     # Shared UI
-│   │   ├── pages/          # Dashboard, Analytics, Alerts, etc.
-│   │   └── services/       # supabaseClient, api, alertService, ...
+│   │   └── lib/            # supabase client/server, api/backend.ts, utils
 ├── ml/                     # ML models
 │   ├── models/             # Regression / LSTM / Anomaly classes
 │   ├── training/           # Training pipelines (+ TFLite export, benchmark)
@@ -96,7 +98,7 @@ cp .env.development .env
 # Edit .env and fill in:
 #   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL
 # Plus (for the frontend, in frontend/.env.local):
-#   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+#   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
 
 ### 3. Install dependencies
@@ -178,7 +180,7 @@ CSV columns expected by [load_data_to_supabase.py](backend/scripts/load_data_to_
 
 ## Authentication
 
-The backend verifies Supabase access tokens using **ES256** asymmetric signatures, fetching the public key from the project's JWKS endpoint (`/auth/v1/.well-known/jwks.json`). The frontend uses `@supabase/supabase-js` for sign-in/sign-out and the shared axios instance in [api.js](frontend/src/services/api.js) attaches the access token automatically.
+The backend verifies Supabase access tokens using **ES256** asymmetric signatures, fetching the public key from the project's JWKS endpoint (`/auth/v1/.well-known/jwks.json`). The frontend uses `@supabase/ssr` + `@supabase/supabase-js` for sign-in/sign-out and the shared axios instance in [backend.ts](frontend/src/lib/api/backend.ts) attaches the access token automatically.
 
 ## TensorFlow Lite Inference
 
@@ -460,7 +462,7 @@ Result: Supabase's `rls_disabled_in_public` advisory drops from 12× **ERROR** t
 
 ## Deployment
 
-The backend deploys to Render via [render.yaml](render.yaml) on the native Python runtime — no Docker. The frontend deploys to Vercel/Netlify/Cloudflare Pages with `npm run build`.
+The backend deploys to Render via [render.yaml](render.yaml) on the native Python runtime — no Docker. The frontend (Next.js) deploys to Vercel with `npm run build`.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the full guide.
 

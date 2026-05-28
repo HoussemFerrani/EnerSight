@@ -362,13 +362,28 @@ class EnergyService:
         
         if not data:
             return []
-        
-        # Convert to DataFrame for anomaly detection
+
         import pandas as pd
         df = pd.DataFrame(data)
-        
-        # Run anomaly detection
-        predictions, scores = self.anomaly_detector.detect(df)
+
+        # Map DB column names to the names the trained Isolation Forest expects.
+        # Without this the wrapper fills every feature with zeros and every row
+        # gets an identical anomaly score.
+        ts = pd.to_datetime(df["time"]) if "time" in df.columns else None
+        feature_df = pd.DataFrame({
+            "EnergyConsumption": df.get("consumption", 0.0),
+            "Temperature":       df.get("temperature", 0.0),
+            "Humidity":          df.get("humidity", 0.0),
+            "Occupancy":         df["occupancy"].fillna(0) if "occupancy" in df.columns else 0,
+            "HVACUsage_On":      df["hvac_usage"].fillna(False).astype(int) if "hvac_usage" in df.columns else 0,
+            "LightingUsage_On":  df["lighting_usage"].fillna(False).astype(int) if "lighting_usage" in df.columns else 0,
+            "Holiday_Yes":       df["holiday"].fillna(False).astype(int) if "holiday" in df.columns else 0,
+            "RenewableEnergy":   df["renewable_energy"].fillna(0.0) if "renewable_energy" in df.columns else 0.0,
+            "Hour":              ts.dt.hour if ts is not None else 12,
+            "DayOfWeek_Num":     ts.dt.dayofweek if ts is not None else 0,
+        })
+
+        predictions, scores = self.anomaly_detector.detect(feature_df)
         
         # Filter for anomalies only (prediction == -1)
         anomalies = []
@@ -386,7 +401,7 @@ class EnergyService:
                     severity = "low"
                 
                 anomalies.append({
-                    "timestamp": record.get("timestamp", start),
+                    "timestamp": record.get("time", start),
                     "device_id": record.get("device_id", "unknown"),
                     "consumption": record.get("consumption", 0.0),
                     "expected_consumption": record.get("consumption", 0.0) * 0.85,  # Estimate
@@ -430,6 +445,7 @@ class EnergyService:
                 "total_consumption": 0,
                 "average_daily": 0,
                 "peak_consumption": 0,
+                "minimum_consumption": 0,
                 "days": 0,
             }
         

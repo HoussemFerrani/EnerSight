@@ -1,3 +1,7 @@
+> ⚠️ **OUTDATED** — This guide describes the pre-migration stack (InfluxDB, Vite, Docker). The current stack is **Supabase (Postgres + Auth)**, **Next.js 16 (App Router)**, and a native FastAPI deployment (no Docker). For accurate setup instructions see [README.md](../README.md#quick-start) and [DEPLOYMENT.md](../DEPLOYMENT.md). This file is kept for historical context only.
+
+---
+
 # EnerSight Setup Guide
 
 Complete installation and setup instructions for the EnerSight platform.

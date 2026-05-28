@@ -10,7 +10,25 @@
       "PowerShell(node --version)",
       "PowerShell(npm --version)",
       "PowerShell(& .\\\\venv\\\\Scripts\\\\python.exe -m backend.scripts.load_data_to_supabase 2>&1)",
-      "mcp__supabase__search_docs"
+      "mcp__supabase__search_docs",
+      "Bash(powershell -ExecutionPolicy Bypass -File .\\\\start.ps1)",
+      "Bash(.\\\\venv\\\\Scripts\\\\python.exe -m uvicorn backend.main:app --reload --port 8000 --host 0.0.0.0)",
+      "Bash(npm --prefix frontend run dev)",
+      "Bash(curl -s -o /dev/null -w \"backend %{http_code}\\\\n\" http://localhost:8000/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s http://localhost:8000/api/v1/info)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/energy/readings?limit=1\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/energy/readings?start=2000-01-01T00:00:00&end=2030-01-01T00:00:00&limit=1\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/anomalies/detect?hours=720\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); a=d['anomalies']; print\\('count:', d['anomalies_detected']\\); print\\('unique scores:', len\\({round\\(x['anomaly_score'],4\\) for x in a}\\)\\); print\\('unique timestamps:', len\\({x['timestamp'] for x in a}\\)\\); print\\('sample:'\\); [print\\(' ',x['timestamp'],x['device_id'],round\\(x['consumption'],1\\),'kWh score=',round\\(x['anomaly_score'],3\\),x['severity']\\) for x in a[:5]]\")",
+      "Bash(curl -sv \"http://localhost:8000/api/v1/anomalies/detect?hours=720\")",
+      "Bash(curl -s -m 5 http://localhost:8000/health)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -First 1 | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 2; Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Measure-Object | Select-Object Count)",
+      "Bash(curl -s -m 2 -o /dev/null -w \"%{http_code}\" http://localhost:8000/health)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/anomalies/detect?hours=720\" -o /tmp/det.json)",
+      "Bash(python -c ' *)",
+      "Bash(curl -s -o C:/tmp/det.json -w \"http=%{http_code}\\\\n\" \"http://localhost:8000/api/v1/anomalies/detect?hours=720\")"
     ]
   }
 }

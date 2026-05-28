@@ -22,7 +22,7 @@ EnerSight runs natively — no Docker. The database is Supabase (managed Postgre
 
 ### Steps
 1. Copy `.env.development` to `.env` and fill in the Supabase values (see [Environment Variables](#environment-variables)).
-2. Create a `frontend/.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+2. Create a `frontend/.env.local` with `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 3. Install dependencies:
    ```powershell
    python -m venv venv
@@ -92,19 +92,19 @@ Health checks run against `/health`.
 
 ## Frontend on Vercel
 
-Vercel deploys static React builds with zero config.
+Vercel is the native target for Next.js — zero-config deploy.
 
 1. Push your repo to GitHub.
 2. In Vercel, **New Project → Import** the repo.
 3. Set the **root directory** to `frontend/`.
-4. Vercel detects Vite and uses `npm run build` → `dist/`.
+4. Vercel auto-detects Next.js (16, App Router) and uses `npm run build` → `.next/`.
 5. Under **Environment Variables**, add:
-   - `VITE_API_URL` → your Render backend URL + `/api/v1`
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_API_URL` → your Render backend URL + `/api/v1`
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 6. Deploy.
 
-Netlify and Cloudflare Pages work the same way.
+Netlify and Cloudflare Pages also support Next.js (via their respective Next adapters), but Vercel is the smoothest path.
 
 ---
 
@@ -127,9 +127,9 @@ Netlify and Cloudflare Pages work the same way.
 
 | Variable | Example |
 |---|---|
-| `VITE_API_URL` | `http://localhost:8000/api/v1` |
-| `VITE_SUPABASE_URL` | `https://xxx.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | `sb_publishable_...` |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000/api/v1` |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://xxx.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `sb_publishable_...` |
 
 ---
 
@@ -170,9 +170,9 @@ Train them locally and re-deploy with the `joblib`/`keras` files:
 
 ### Frontend shows a white screen
 Browser console almost always tells you. Common culprits:
-- Missing `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in `frontend/.env.local`
+- Missing `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `frontend/.env.local`
 - Backend not running (network errors on every request)
-- Vite cache — hard-refresh with Ctrl+Shift+R
+- Stale Next.js build cache — delete `frontend/.next/` and restart `npm run dev`, then hard-refresh with Ctrl+Shift+R
 
 ### "Session expired" on Alerts/Analytics
-The old `enersight_auth_token` localStorage key is gone. All frontend service files (`alertService.js`, `analyticsService.js`) must use the shared axios client from `services/api.js`, which attaches the Supabase token automatically.
+The old `enersight_auth_token` localStorage key is gone. All client-side calls to the FastAPI backend must use the shared axios instance in [frontend/src/lib/api/backend.ts](frontend/src/lib/api/backend.ts), which pulls the Supabase access token from `@supabase/ssr` and attaches it as `Authorization: Bearer …` automatically.

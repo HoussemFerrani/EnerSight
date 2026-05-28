@@ -1,3 +1,7 @@
+> ⚠️ **PARTIALLY OUTDATED** — Written when InfluxDB was the time-series store and Docker was the deployment model. Both have changed: the time-series store is now **Supabase Postgres** with `pg_partman` partitioning, and there is no Docker setup. The clean-architecture, repository-pattern, and DI material below still accurately describes the codebase. See [README.md](../README.md) for the current stack.
+
+---
+
 # 🏗️ Architecture Implementation Summary
 
 ## ✨ What Was Implemented

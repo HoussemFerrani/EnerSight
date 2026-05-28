@@ -1,3 +1,7 @@
+> ⚠️ **PARTIALLY OUTDATED** — These ADRs were written when the time-series store was InfluxDB and deployment used Docker. Both have since changed: InfluxDB was replaced by **Supabase Postgres** with `pg_partman` monthly partitioning (see [README.md → Time-Series Storage](../README.md#time-series-storage)), and Docker was dropped in favor of native Render deployment. The clean-architecture, dependency-injection, and async-first decisions described here remain accurate.
+
+---
+
 # Architecture Decision Records (ADR)
 
 ## ADR-001: Clean Architecture Implementation

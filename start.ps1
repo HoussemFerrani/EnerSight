@@ -1,4 +1,4 @@
-# EnerSight - start backend (uvicorn) and frontend (vite) in two new windows.
+# EnerSight - start backend (uvicorn) and frontend (Next.js) in two new windows.
 # Run from the project root. Requires the venv at .\venv and frontend deps installed.
 
 $ErrorActionPreference = "Stop"
