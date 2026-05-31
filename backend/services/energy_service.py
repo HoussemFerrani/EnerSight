@@ -38,6 +38,7 @@ class EnergyService:
         energy_repository: Optional[EnergyDataRepository] = None,
         regression_model: Any = None,
         lstm_model: Any = None,
+        lstm_estimator: Any = None,
         anomaly_detector: Any = None,
         prediction_log_repository: Optional[PredictionLogRepository] = None,
     ):
@@ -47,13 +48,16 @@ class EnergyService:
         Args:
             energy_repository: Repository for energy data access (optional)
             regression_model: ML model for regression predictions
-            lstm_model: LSTM model for time-series forecasting
+            lstm_model: LSTM model for time-series forecasting (legacy)
+            lstm_estimator: Multivariate LSTM that estimates consumption from
+                current conditions (powers /predict?model=lstm)
             anomaly_detector: Model for anomaly detection
             prediction_log_repository: Optional sink for live drift monitoring
         """
         self.repository = energy_repository
         self.regression_model = regression_model
         self.lstm_model = lstm_model
+        self.lstm_estimator = lstm_estimator
         self.anomaly_detector = anomaly_detector
         self.prediction_log_repository = prediction_log_repository
     
@@ -226,6 +230,7 @@ class EnergyService:
         equipment_usage: float,
         renewable_energy: float,
         for_timestamp: Optional[datetime] = None,
+        model: str = "rf",
     ) -> Dict[str, Any]:
         """
         Predict energy consumption using ML model
@@ -244,8 +249,21 @@ class EnergyService:
             PredictionError: If prediction fails
             MLException: If model not loaded
         """
-        if not self.regression_model:
-            raise MLException("Regression model not loaded")
+        # Select the prediction model. Both answer the same question (estimate
+        # consumption from current conditions); the multivariate LSTM is offered
+        # as an alternative to Random Forest.
+        if model == "lstm":
+            if not self.lstm_estimator:
+                raise MLException("Multivariate LSTM estimator not loaded")
+            predictor = self.lstm_estimator
+            model_name = "Multivariate LSTM"
+            model_version_key = "lstm_multivariate"
+        else:
+            if not self.regression_model:
+                raise MLException("Regression model not loaded")
+            predictor = self.regression_model
+            model_name = "Random Forest"
+            model_version_key = "regression_random_forest"
 
         try:
             # Prepare features
@@ -260,17 +278,17 @@ class EnergyService:
             }
 
             # Make prediction
-            prediction = self.regression_model.predict(features)
+            prediction = predictor.predict(features)
 
-            logger.info(f"Predicted consumption: {prediction:.2f} kWh")
+            logger.info(f"Predicted consumption ({model_name}): {prediction:.2f} kWh")
 
             # Best-effort log for drift monitoring. Never block the response on
             # a log-write failure — production monitoring is non-critical.
             target_at = for_timestamp or datetime.now(timezone.utc)
             await self._safe_log_prediction(
                 prediction_type="predict",
-                model_name="Random Forest",
-                model_version_key="regression_random_forest",
+                model_name=model_name,
+                model_version_key=model_version_key,
                 predicted_value=float(prediction),
                 target_at=target_at,
                 features=features,
@@ -278,7 +296,7 @@ class EnergyService:
 
             return {
                 "predicted_consumption": round(prediction, 2),
-                "model": "Random Forest",
+                "model": model_name,
                 "confidence": 0.85,  # TODO: Calculate actual confidence
                 "features": features,
             }

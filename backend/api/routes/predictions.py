@@ -24,18 +24,20 @@ router = APIRouter()
     "/predict",
     response_model=PredictionResponse,
     summary="Predict Energy Consumption",
-    description="Predict energy consumption using Random Forest regression model"
+    description="Predict energy consumption from current conditions. Choose the model via `?model=rf` (Random Forest, default) or `?model=lstm` (multivariate LSTM)."
 )
 async def predict_consumption(
     data: PredictionRequest,
+    model: str = Query("rf", pattern="^(rf|lstm)$", description="Prediction model: 'rf' (Random Forest) or 'lstm' (multivariate LSTM)"),
     service: EnergyService = Depends(get_energy_service)
 ):
     """
     Predict energy consumption based on input features
-    
-    Uses trained Random Forest model to predict total consumption
-    based on environmental factors and equipment usage patterns.
-    
+
+    Both models estimate total consumption from environmental factors and
+    equipment usage at the same timestep. Random Forest is the default;
+    `?model=lstm` uses the concurrent multivariate LSTM.
+
     Returns:
     - Predicted consumption value
     - Model name
@@ -52,6 +54,7 @@ async def predict_consumption(
             equipment_usage=data.equipment_usage,
             renewable_energy=data.renewable_energy,
             for_timestamp=data.for_timestamp,
+            model=model,
         )
         return result
     

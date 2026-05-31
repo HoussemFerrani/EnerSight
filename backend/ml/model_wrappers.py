@@ -221,6 +221,48 @@ class LSTMTFLiteWrapper:
         return forecast
 
 
+class LSTMMultivariateWrapper:
+    """
+    Wrapper for the concurrent multivariate LSTM (sequence regressor).
+
+    Unlike `LSTMModelWrapper` (which forecasts the future from past consumption
+    and is meaningless on this temporally-random dataset), this model estimates
+    consumption from the *current* conditions — the same question `/predict`
+    answers with Random Forest, so it exposes the same `predict(features)`
+    signature and uses identical input conventions for a fair comparison.
+    """
+
+    def __init__(self, loaded_model_data: Dict[str, Any]):
+        # `model` is an EnergyMultivariateLSTMModel already loaded with weights
+        # and scalers.
+        self.model = loaded_model_data["model"]
+        self.feature_columns = self.model.feature_columns
+        logger.info("Initialized multivariate LSTM wrapper")
+
+    def predict(self, features: Dict[str, float]) -> float:
+        """Estimate consumption from a conditions dict.
+
+        Accepts the same feature dict as `RegressionModelWrapper.predict` and
+        applies the same defaults (SquareFootage=1000, time/holiday features
+        absent -> 0) so RF and LSTM are directly comparable on /predict.
+        """
+        feature_row = {
+            "Temperature": features.get("Temperature", 22.0),
+            "Humidity": features.get("Humidity", 50.0),
+            "SquareFootage": 1000.0,
+            "Occupancy": features.get("Occupancy", 10),
+            "RenewableEnergy": features.get("RenewableEnergy", 0.0),
+            "HVACUsage_On": 1 if features.get("HVACUsage", 0.0) > 0 else 0,
+            "LightingUsage_On": 1 if features.get("LightingUsage", 0.0) > 0 else 0,
+            "Holiday_Yes": 0,
+            "Hour": 0,
+            "DayOfWeek_Num": 0,
+        }
+        prediction = self.model.predict_point(feature_row)
+        logger.debug(f"Multivariate LSTM predicted: {prediction:.2f} kWh")
+        return float(prediction)
+
+
 class AnomalyDetectorWrapper:
     """
     Wrapper for loaded anomaly detector

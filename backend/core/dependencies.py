@@ -231,6 +231,11 @@ async def get_energy_service(
         lstm_model = None
         logger.warning("LSTM model not loaded")
     try:
+        lstm_estimator = model_registry.get_model("lstm_estimator")
+    except Exception:
+        lstm_estimator = None
+        logger.warning("Multivariate LSTM estimator not loaded")
+    try:
         anomaly_detector = model_registry.get_model("anomaly_detector")
     except Exception:
         anomaly_detector = None
@@ -240,6 +245,7 @@ async def get_energy_service(
         energy_repository=repository,
         regression_model=regression_model,
         lstm_model=lstm_model,
+        lstm_estimator=lstm_estimator,
         anomaly_detector=anomaly_detector,
         prediction_log_repository=prediction_log_repository,
     )
@@ -274,6 +280,7 @@ async def init_dependencies() -> None:
         from backend.ml.model_loaders import (
             load_regression_model,
             load_lstm_model,
+            load_lstm_multivariate,
             load_anomaly_detector,
         )
         
@@ -284,12 +291,19 @@ async def init_dependencies() -> None:
         )
         logger.info("Registered regression model (Random Forest)")
         
-        # Register LSTM model
+        # Register LSTM model (univariate forecaster — legacy /forecast path)
         model_registry.register_model(
             "lstm",
             load_lstm_model
         )
         logger.info("Registered LSTM model")
+
+        # Register multivariate LSTM estimator (powers /predict?model=lstm)
+        model_registry.register_model(
+            "lstm_estimator",
+            load_lstm_multivariate
+        )
+        logger.info("Registered multivariate LSTM estimator")
         
         # Register anomaly detector
         model_registry.register_model(

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-31T10:18:40.566397+00:00",
+  "generated_at": "2026-05-31T10:49:45.305171+00:00",
   "dataset": {
     "path": "data/raw/Energy_consumption.csv",
     "records": 1000,
@@ -53,14 +53,16 @@
       "mape": 5.487841847606317,
       "accuracy_pct": 94.51215815239368
     },
-    "lstm_forecast": {
-      "task": "forecast",
-      "algorithm": "LSTM",
-      "sequence_length": 24,
-      "rmse": 8.021364777775693,
-      "mae": 6.465127959378832,
-      "mape": 8.242683980622136,
-      "accuracy_pct": 91.75731601937787
+    "lstm_multivariate": {
+      "task": "estimation",
+      "algorithm": "Multivariate LSTM",
+      "sequence_length": 1,
+      "rmse": 5.005896967539642,
+      "mae": 4.125533475300842,
+      "r2": 0.5910819051988456,
+      "mape": 5.366232165738779,
+      "accuracy_pct": 94.63376783426122,
+      "note": "Concurrent estimator (conditions->consumption), not a forecaster: the dataset has ~zero autocorrelation so true forecasting is impossible."
     },
     "anomaly_detector": {
       "task": "anomaly_detection",

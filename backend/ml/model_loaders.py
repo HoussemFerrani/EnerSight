@@ -17,6 +17,7 @@ from backend.ml.model_wrappers import (
     RegressionModelWrapper,
     LSTMModelWrapper,
     LSTMTFLiteWrapper,
+    LSTMMultivariateWrapper,
     AnomalyDetectorWrapper,
 )
 
@@ -106,6 +107,34 @@ def load_lstm_model():
     scaler = joblib.load(scaler_path)
 
     return LSTMModelWrapper({"model": model, "scaler": scaler})
+
+
+def load_lstm_multivariate() -> LSTMMultivariateWrapper:
+    """
+    Load the concurrent multivariate LSTM estimator (model + scalers bundle).
+
+    This is the genuinely-trained LSTM (R² ≈ 0.59): it estimates consumption
+    from current conditions rather than forecasting from past consumption.
+    Powers `/predictions/predict?model=lstm`.
+
+    Raises:
+        FileNotFoundError: If the artifacts don't exist.
+    """
+    from ml.models.lstm_multivariate import EnergyMultivariateLSTMModel
+
+    models_dir = get_models_dir()
+    keras_path = models_dir / "lstm_energy_multivariate.keras"
+    bundle_path = models_dir / "lstm_multivariate_bundle.joblib"
+
+    if not keras_path.exists() or not bundle_path.exists():
+        raise FileNotFoundError(
+            f"Multivariate LSTM artifacts not found: {keras_path} / {bundle_path}. "
+            "Run `python -m ml.training.train_lstm_multivariate`."
+        )
+
+    logger.info(f"Loading multivariate LSTM from {keras_path}")
+    model = EnergyMultivariateLSTMModel().load(str(keras_path), str(bundle_path))
+    return LSTMMultivariateWrapper({"model": model})
 
 
 def load_anomaly_detector() -> AnomalyDetectorWrapper:

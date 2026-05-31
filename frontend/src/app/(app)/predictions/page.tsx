@@ -18,8 +18,9 @@ export default function PredictionsPage() {
       <Alert>
         <Brain className="size-4" />
         <AlertDescription>
-          The Random Forest regression model was trained on the loaded sample dataset. Enter realistic values to see
-          a predicted consumption. Confidence reflects feature similarity to the training distribution.
+          Estimate consumption from current conditions using either the Random Forest (default) or the multivariate
+          LSTM — both are trained on the loaded sample dataset and reach a similar R² (~0.55–0.59). Enter realistic
+          values and pick a model to compare their outputs.
         </AlertDescription>
       </Alert>
 

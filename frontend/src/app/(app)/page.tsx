@@ -638,6 +638,9 @@ function describe(m: ModelEntry): string {
   if (m.task === "forecast") {
     return `LSTM seq=${m.sequence_length}, ${m.epochs_trained ?? "?"} epochs`
   }
+  if (m.task === "estimation") {
+    return m.note ?? "Estimates consumption from current conditions"
+  }
   if (m.task === "regression") {
     return m.uses_lag_features ? "Uses lag features (1h, 24h, 168h, 24h rolling mean)" : "Baseline features only"
   }

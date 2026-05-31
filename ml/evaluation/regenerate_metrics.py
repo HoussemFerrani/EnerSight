@@ -34,12 +34,10 @@ import os
 from datetime import datetime, timezone
 
 import joblib
-import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from ml.models.regression_model import EnergyRegressionModel
-from ml.models.lstm_model import EnergyLSTMModel
 
 TRAINED_DIR = "ml/models/trained"
 METRICS_PATH = f"{TRAINED_DIR}/metrics.json"
@@ -83,34 +81,35 @@ def _regression_block(model_type: str, include_lag_features: bool) -> dict:
 
 
 def _lstm_block() -> dict:
-    """Re-score the saved LSTM on the chronological 20% tail, in kWh."""
-    model = EnergyLSTMModel(sequence_length=24, features=1)
-    model.load_model(f"{TRAINED_DIR}/lstm_energy_forecast.keras")
+    """Re-score the saved multivariate LSTM estimator on its hold-out split.
+
+    This is the genuinely-trained LSTM (concurrent estimator, R² ≈ 0.59). The
+    old univariate forecaster is intentionally NOT scored here: it collapses to
+    the mean on this temporally-random data (R² ≈ -0.05) and its MAPE-based
+    "accuracy" was misleading.
+    """
+    from ml.models.lstm_multivariate import EnergyMultivariateLSTMModel
+
+    model = EnergyMultivariateLSTMModel()
+    model.load(
+        f"{TRAINED_DIR}/lstm_energy_multivariate.keras",
+        f"{TRAINED_DIR}/lstm_multivariate_bundle.joblib",
+    )
 
     df = pd.read_csv(CLEANED_DATA)
-    df["Timestamp"] = pd.to_datetime(df["Timestamp"])
-    # prepare_data re-fits a MinMaxScaler on the same target column — idempotent
-    # on identical data, so the scaling matches training.
-    X_all, y_all = model.prepare_data(df)
-    _, X_test, _, y_test = train_test_split(X_all, y_all, test_size=0.2, shuffle=False)
-
-    preds_scaled = model.model.predict(X_test, verbose=0)
-    preds = model.scaler.inverse_transform(preds_scaled).ravel()
-    actuals = model.scaler.inverse_transform(y_test.reshape(-1, 1)).ravel()
-
-    rmse = float(np.sqrt(np.mean((preds - actuals) ** 2)))
-    mae = float(np.mean(np.abs(preds - actuals)))
-    mask = np.abs(actuals) > 1e-6
-    mape = float(np.mean(np.abs((actuals[mask] - preds[mask]) / actuals[mask])) * 100) if mask.any() else float("nan")
+    _, X_test, _, y_test = model.prepare_and_split(df, test_size=0.2)
+    m = model.evaluate(X_test, y_test)
 
     return {
-        "task": "forecast",
-        "algorithm": "LSTM",
-        "sequence_length": 24,
-        "rmse": rmse,
-        "mae": mae,
-        "mape": mape,
-        "accuracy_pct": max(0.0, 100.0 - mape),
+        "task": "estimation",
+        "algorithm": "Multivariate LSTM",
+        "sequence_length": model.sequence_length,
+        "rmse": m["rmse"],
+        "mae": m["mae"],
+        "r2": m["r2"],
+        "mape": m["mape"],
+        "accuracy_pct": m["accuracy_pct"],
+        "note": "Concurrent estimator (conditions->consumption), not a forecaster: the dataset has ~zero autocorrelation so true forecasting is impossible.",
     }
 
 
@@ -146,8 +145,8 @@ def main() -> None:
         payload["models"][f"regression_{model_type}_baseline"] = _regression_block(model_type, False)
         payload["models"][f"regression_{model_type}_lagged"] = _regression_block(model_type, True)
 
-    print("Scoring LSTM on the chronological tail...")
-    payload["models"]["lstm_forecast"] = _lstm_block()
+    print("Scoring multivariate LSTM estimator on its hold-out split...")
+    payload["models"]["lstm_multivariate"] = _lstm_block()
 
     anomaly = _preserved_anomaly_block()
     if anomaly is not None:

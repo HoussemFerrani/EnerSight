@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 
-import { predict, type PredictionResult } from "./actions"
+import { predict, type PredictionModel, type PredictionResult } from "./actions"
 
 type FormState = {
   temperature: string
@@ -42,8 +42,14 @@ const FIELDS: Array<{ key: keyof FormState; label: string; unit: string; step?: 
   { key: "renewable_energy", label: "Renewable", unit: "kWh", step: "0.1" },
 ]
 
+const MODELS: Array<{ key: PredictionModel; label: string }> = [
+  { key: "rf", label: "Random Forest" },
+  { key: "lstm", label: "Multivariate LSTM" },
+]
+
 export function PredictionForm() {
   const [form, setForm] = useState<FormState>(DEFAULTS)
+  const [model, setModel] = useState<PredictionModel>("rf")
   const [result, setResult] = useState<PredictionResult | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -66,7 +72,7 @@ export function PredictionForm() {
       return
     }
     startTransition(async () => {
-      const res = await predict(input)
+      const res = await predict(input, model)
       if (res.ok) {
         setResult(res.result)
         toast.success("Prediction complete")
@@ -93,6 +99,23 @@ export function PredictionForm() {
             />
           </div>
         ))}
+        <div className="col-span-full space-y-2">
+          <Label>Model</Label>
+          <div className="flex flex-wrap gap-2">
+            {MODELS.map((m) => (
+              <Button
+                key={m.key}
+                type="button"
+                variant={model === m.key ? "default" : "outline"}
+                size="sm"
+                onClick={() => setModel(m.key)}
+                disabled={isPending}
+              >
+                {m.label}
+              </Button>
+            ))}
+          </div>
+        </div>
         <div className="col-span-full mt-2">
           <Button onClick={submit} disabled={isPending} size="lg" className="w-full sm:w-auto">
             <Zap className="mr-2 size-4" />
