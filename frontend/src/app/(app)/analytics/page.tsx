@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, BarChart3, DollarSign, TrendingUp } from "lucide-react"
+import { ArrowUp, BarChart3, DollarSign, TrendingUp } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"

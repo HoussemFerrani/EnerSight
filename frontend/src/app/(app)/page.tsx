@@ -452,7 +452,7 @@ function CrossValidationTable({ evaluation }: { evaluation: EvaluationResponse }
         </table>
       </div>
       <p className="text-xs text-muted-foreground">
-        Std dev under 1% means the model's accuracy is consistent across data splits — you can
+        Std dev under 1% means the model&apos;s accuracy is consistent across data splits — you can
         trust the headline number. High std dev means accuracy depends on which slice of data you
         evaluate on.
       </p>
@@ -527,7 +527,7 @@ function AnomalyEvalCard({ anomaly }: { anomaly: EvaluationResponse["anomaly"] }
             </span>
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Flagged by IsolationForest but matched no rule — these are the "unknown unknowns" the
+            Flagged by IsolationForest but matched no rule — these are the &quot;unknown unknowns&quot; the
             ML adds on top of the business rules. Worth manual triage.
           </p>
         </div>
@@ -545,23 +545,6 @@ function AnomalyEvalCard({ anomaly }: { anomaly: EvaluationResponse["anomaly"] }
       {anomaly.caveat && (
         <p className="text-xs italic text-muted-foreground">⚠ {anomaly.caveat}</p>
       )}
-    </div>
-  )
-}
-
-function Metric({
-  label,
-  value,
-  variant,
-}: {
-  label: string
-  value: string
-  variant: "default" | "secondary" | "destructive"
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-md border p-3">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <Badge variant={variant}>{value}</Badge>
     </div>
   )
 }

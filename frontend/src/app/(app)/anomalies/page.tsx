@@ -1,4 +1,4 @@
-import { AlertTriangle, Brain, RefreshCw, Sparkles } from "lucide-react"
+import { AlertTriangle, Brain, Sparkles } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"

@@ -31,7 +31,7 @@ export function PeriodSelector({ period, rate }: { period: string; rate: number 
     <div className="flex flex-wrap items-end gap-3">
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Bucket</Label>
-        <Select value={period} onValueChange={(v) => setParam("period", v)} disabled={isPending}>
+        <Select value={period} onValueChange={(v) => v && setParam("period", v)} disabled={isPending}>
           <SelectTrigger className="w-32">
             <SelectValue />
           </SelectTrigger>

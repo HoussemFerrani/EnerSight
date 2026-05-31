@@ -92,9 +92,9 @@ class TestCORS:
     
     def test_cors_headers_present(self, client):
         """Test CORS headers are included in responses"""
-        # Act
-        response = client.get("/")
-        
+        # Act - CORSMiddleware only emits CORS headers when an Origin is sent
+        response = client.get("/", headers={"Origin": "http://localhost:3000"})
+
         # Assert
         assert "access-control-allow-origin" in response.headers
         assert "access-control-allow-credentials" in response.headers

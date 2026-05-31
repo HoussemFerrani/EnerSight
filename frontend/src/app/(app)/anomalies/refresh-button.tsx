@@ -26,7 +26,8 @@ export function RefreshButton({ hours }: { hours: number }) {
   const params = useSearchParams()
   const [isPending, startTransition] = useTransition()
 
-  function onChange(value: string) {
+  function onChange(value: string | null) {
+    if (value === null) return
     const next = new URLSearchParams(params)
     next.set("hours", value)
     startTransition(() => router.replace(`/anomalies?${next.toString()}`))

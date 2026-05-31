@@ -149,11 +149,15 @@ def client() -> TestClient:
 @pytest_asyncio.fixture
 async def async_client():
     """
-    Async test client for testing async endpoints
+    Async test client for testing async endpoints.
+
+    Routes requests directly into the ASGI app via ASGITransport instead of
+    opening a real socket, so no live server (or DNS) is required.
     """
-    from httpx import AsyncClient
-    
-    async with AsyncClient(base_url="http://test://") as client:
+    from httpx import AsyncClient, ASGITransport
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
 
 

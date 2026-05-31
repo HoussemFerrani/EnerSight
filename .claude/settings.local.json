@@ -28,7 +28,19 @@
       "Bash(curl -s -m 2 -o /dev/null -w \"%{http_code}\" http://localhost:8000/health)",
       "Bash(curl -s \"http://localhost:8000/api/v1/anomalies/detect?hours=720\" -o /tmp/det.json)",
       "Bash(python -c ' *)",
-      "Bash(curl -s -o C:/tmp/det.json -w \"http=%{http_code}\\\\n\" \"http://localhost:8000/api/v1/anomalies/detect?hours=720\")"
+      "Bash(curl -s -o C:/tmp/det.json -w \"http=%{http_code}\\\\n\" \"http://localhost:8000/api/v1/anomalies/detect?hours=720\")",
+      "Bash(./venv/Scripts/python.exe --version)",
+      "Bash(./venv/Scripts/python.exe -m pytest tests/ -p no:cacheprovider --no-header)",
+      "Bash(./venv/Scripts/python.exe -m pytest tests/integration/test_api.py -p no:cacheprovider -o addopts=\"\" --no-header -q)",
+      "Bash(grep -v \"Warning\\\\|warn\\\\|deprecated\\\\|Deprecat\\\\|---\\\\|^$\")",
+      "Bash(./venv/Scripts/python.exe -c \"import httpx; print\\('httpx', httpx.__version__\\); from httpx import ASGITransport; print\\('ASGITransport OK'\\)\")",
+      "Bash(./venv/Scripts/python.exe -c \"from backend.core.config import get_settings; print\\(get_settings\\(\\).cors_origins_list\\)\")",
+      "Bash(./venv/Scripts/python.exe -m pytest tests/integration/test_api.py -p no:cacheprovider -o addopts=\"\" -q)",
+      "Bash(./venv/Scripts/python.exe -m pytest tests/ -p no:cacheprovider -o addopts=\"\" -q)",
+      "Bash(sed -n '1p' \"src/app/\\(app\\)/analytics/page.tsx\")",
+      "Bash(sed -n '1p' \"src/app/\\(app\\)/anomalies/page.tsx\")",
+      "Bash(sed -n '552p' \"src/app/\\(app\\)/page.tsx\")",
+      "Bash(./venv/Scripts/python.exe -c \"import json,glob; [print\\(f'OK  {p}'\\) for p in glob.glob\\('ml/models/trained/*.json'\\) if \\(json.load\\(open\\(p\\)\\) or True\\)]\")"
     ]
   }
 }

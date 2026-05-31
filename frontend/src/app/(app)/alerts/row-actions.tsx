@@ -32,10 +32,10 @@ export function AlertRowActions({ id, status }: Props) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" disabled={isPending}>
-          <MoreHorizontal className="size-4" />
-        </Button>
+      <DropdownMenuTrigger
+        render={<Button variant="ghost" size="icon" disabled={isPending} />}
+      >
+        <MoreHorizontal className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {status !== "acknowledged" && status !== "resolved" && (

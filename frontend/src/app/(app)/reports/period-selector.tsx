@@ -25,7 +25,8 @@ export function PeriodSelector({ days }: { days: number }) {
   const params = useSearchParams()
   const [, startTransition] = useTransition()
 
-  function onChange(value: string) {
+  function onChange(value: string | null) {
+    if (value === null) return
     const next = new URLSearchParams(params)
     next.set("days", value)
     startTransition(() => router.replace(`/reports?${next.toString()}`))
