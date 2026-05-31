@@ -56,11 +56,16 @@ ENV/
 *.pth
 models/trained/*.keras
 models/trained/*.pt
+# ...but keep the trained artifacts a fresh clone needs to actually run.
+!ml/models/trained/*.joblib
 
 # Data (except sample)
 data/raw/*.csv
 data/processed/*.csv
 !data/raw/sample_data.csv
+# Ship the demo dataset so the app + ML pipeline run from a fresh clone.
+!data/raw/Energy_consumption.csv
+!data/processed/energy_data_cleaned.csv
 
 # Node modules (if using Node-RED or frontend)
 node_modules/

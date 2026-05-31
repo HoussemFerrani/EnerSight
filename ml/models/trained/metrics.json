@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-17T16:17:07.732864+00:00",
+  "generated_at": "2026-05-31T10:18:40.566397+00:00",
   "dataset": {
     "path": "data/raw/Energy_consumption.csv",
     "records": 1000,
@@ -9,6 +9,59 @@
     }
   },
   "models": {
+    "regression_random_forest_baseline": {
+      "task": "regression",
+      "algorithm": "random_forest",
+      "variant": "baseline",
+      "uses_lag_features": false,
+      "rmse": 5.4800951041721175,
+      "mae": 4.415568959969601,
+      "r2": 0.5415038257004778,
+      "mape": 5.837573103945602,
+      "accuracy_pct": 94.1624268960544
+    },
+    "regression_random_forest_lagged": {
+      "task": "regression",
+      "algorithm": "random_forest",
+      "variant": "lagged",
+      "uses_lag_features": true,
+      "rmse": 4.939987347946945,
+      "mae": 4.140349514999382,
+      "r2": 0.5906526274218185,
+      "mape": 5.33672905960136,
+      "accuracy_pct": 94.66327094039863
+    },
+    "regression_gradient_boost_baseline": {
+      "task": "regression",
+      "algorithm": "gradient_boost",
+      "variant": "baseline",
+      "uses_lag_features": false,
+      "rmse": 5.620958729999911,
+      "mae": 4.5548034770390595,
+      "r2": 0.5176299682194868,
+      "mape": 6.006942472532062,
+      "accuracy_pct": 93.99305752746794
+    },
+    "regression_gradient_boost_lagged": {
+      "task": "regression",
+      "algorithm": "gradient_boost",
+      "variant": "lagged",
+      "uses_lag_features": true,
+      "rmse": 5.166865004143981,
+      "mae": 4.260405785098898,
+      "r2": 0.5521891998967825,
+      "mape": 5.487841847606317,
+      "accuracy_pct": 94.51215815239368
+    },
+    "lstm_forecast": {
+      "task": "forecast",
+      "algorithm": "LSTM",
+      "sequence_length": 24,
+      "rmse": 8.021364777775693,
+      "mae": 6.465127959378832,
+      "mape": 8.242683980622136,
+      "accuracy_pct": 91.75731601937787
+    },
     "anomaly_detector": {
       "task": "anomaly_detection",
       "algorithm": "IsolationForest (+ rules hybrid)",
@@ -36,5 +89,6 @@
       },
       "note": "Pseudo-labels from business rules. Hybrid is the production output."
     }
-  }
+  },
+  "note": "Regenerated from saved artifacts via ml.evaluation.regenerate_metrics (no retraining)."
 }
