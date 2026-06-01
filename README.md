@@ -16,12 +16,12 @@ EnerSight monitors, analyzes, and optimizes building energy consumption using Io
 ## Features
 
 - **Real-time monitoring** — live energy consumption tracking
-- **ML predictions** — Random Forest, Gradient Boosting, and LSTM
+- **ML predictions** — Random Forest / Gradient Boosting regressors and a multivariate LSTM estimator (pick the model on the predictions page or via `/predict?model=rf|lstm`)
 - **Anomaly detection** — Isolation Forest with explanations
 - **Model accuracy & drift monitoring** — training-time metrics, k-fold cross-validation, predicted-vs-actual charts, and live drift backfilled in-database via pg_cron (see [Model Accuracy & Drift Monitoring](#model-accuracy--drift-monitoring))
 - **Optimization recommendations** — rules engine that suggests concrete actions to reduce waste, with projected monthly savings (see [Optimization Recommendations](#optimization-recommendations))
 - **Reports** — downloadable PDF period reports + CSV export of raw readings (see [Reports](#reports))
-- **Edge-deployable ML** — the LSTM forecaster has a TensorFlow Lite variant (~8× smaller, ~49× faster on CPU); see [TensorFlow Lite Inference](#tensorflow-lite-inference)
+- **Edge-deployable ML** — the (legacy univariate) LSTM forecaster has a TensorFlow Lite variant (~8× smaller, ~49× faster on CPU), shown as an edge-deployment exercise; see [TensorFlow Lite Inference](#tensorflow-lite-inference)
 - **Interactive dashboards** — Recharts visualizations
 - **Authentication** — Supabase Auth (email/password, JWT)
 - **Alerts** — threshold breaches surface as per-user alerts
@@ -136,8 +136,8 @@ This launches:
 - `POST /api/v1/energy/readings` — submit a reading
 
 ### Predictions
-- `POST /api/v1/predictions/predict` — single prediction (optional `for_timestamp` ISO-8601 to anchor the prediction for drift backfill)
-- `POST /api/v1/predictions/forecast` — forecast horizon
+- `POST /api/v1/predictions/predict` — single prediction from current conditions. Pick the model with `?model=rf` (Random Forest, default) or `?model=lstm` (multivariate LSTM estimator). Optional `for_timestamp` ISO-8601 anchors the prediction for drift backfill.
+- `POST /api/v1/predictions/forecast` — legacy time-series forecast horizon (univariate LSTM; see the forecasting caveat under [ML Models](#ml-models))
 
 ### ML Monitoring (auth required)
 - `GET /api/v1/ml/metrics` — training-time RMSE/MAE/R²/MAPE/Accuracy per model
@@ -185,6 +185,8 @@ The backend verifies Supabase access tokens using **ES256** asymmetric signature
 ## TensorFlow Lite Inference
 
 The brief lists **TensorFlow Lite** under the tools section because the project's keyword list explicitly includes *IoT*, *Smart Buildings*, and *Smart Homes*. TFLite is what makes ML deployable to those targets — a stripped-down runtime that runs trained TensorFlow models on Raspberry Pi, ESP32-class gateways, smartphones, and microcontrollers, with **no full TensorFlow install needed**.
+
+> **Scope caveat (read this first).** This section is a *deployment-optimization exercise* applied to the **legacy univariate LSTM forecaster**. On this dataset that forecaster does not beat a mean predictor (the data is temporally random — see [the forecasting-vs-estimation note](#a-note-on-forecasting-vs-estimation-important)), so the value demonstrated here is the **size/latency win of the TFLite runtime**, not forecast accuracy. The genuinely-accurate model is the multivariate LSTM estimator served at `/predict?model=lstm`; converting *it* to TFLite is an identical, trivial follow-up.
 
 ### What was added
 
@@ -365,14 +367,24 @@ The previous foreign key `anomalies.reading_id → energy_readings.id` was remov
 
 ## ML Models
 
-- **Random Forest Regressor** — primary prediction (`ml/models/regression_model.py`)
-- **LSTM** — sequential forecasting (`ml/models/lstm_model.py`)
-- **Isolation Forest** — anomaly detection (`ml/models/anomaly_detector.py`)
+- **Random Forest Regressor** — default consumption predictor (`ml/models/regression_model.py`). R² ≈ 0.54, RMSE ≈ 5.5 kWh.
+- **Gradient Boosting Regressor** — benchmark predictor, similar accuracy.
+- **Multivariate LSTM** — concurrent consumption *estimator* (`ml/models/lstm_multivariate.py`). R² ≈ 0.59, RMSE ≈ 5.0 kWh — the strongest single model. Selectable via `/predict?model=lstm`.
+- **Isolation Forest** — anomaly detection (`ml/models/anomaly_detector.py`), used as a rules+IF hybrid.
+- **Univariate LSTM** — legacy time-series forecaster (`ml/models/lstm_model.py`), kept for the `/forecast` endpoint and the TFLite edge-deployment demo. See the honest caveat under [TensorFlow Lite Inference](#tensorflow-lite-inference).
 
-Trained artifacts live in `ml/models/trained/`. Retrain all models + persist evaluation metrics via:
+### A note on forecasting vs. estimation (important)
+
+This dataset is **temporally random**: `EnergyConsumption` and every driver have ~zero hour-to-hour autocorrelation (verified — e.g. consumption lag-1 ≈ 0.00, Temperature lag-1 ≈ −0.02). Consumption is driven by *concurrent* conditions (Temperature correlates +0.70), not by its own history.
+
+Consequence: **true forecasting is not learnable here** — the original univariate LSTM collapsed to predicting the mean (R² ≈ −0.05, i.e. worse than the mean), and its old MAPE-based "accuracy" was misleading on such a tight target (a mean-only predictor already scores ~91%). The LSTM is therefore framed as a **concurrent multivariate estimator** (`sequence_length=1`): given the conditions at a timestep, estimate that timestep's consumption. This reaches the data's real ceiling (R² ≈ 0.59) and matches what `/predict?model=lstm` actually returns.
+
+Trained artifacts live in `ml/models/trained/`. Retrain the regression/forecaster/anomaly models + persist metrics via:
 
 ```powershell
-.\venv\Scripts\python.exe -m ml.training.train_models
+.\venv\Scripts\python.exe -m ml.training.train_models          # RF / GB / univariate LSTM / anomaly
+.\venv\Scripts\python.exe -m ml.training.train_lstm_multivariate   # multivariate LSTM estimator
+.\venv\Scripts\python.exe -m ml.evaluation.regenerate_metrics      # rebuild metrics.json from saved models (no retrain)
 ```
 
 The `regression_random_forest` variant also supports `include_lag_features=True`, which adds lag (1h, 24h, 168h) and 24h rolling-mean features over `EnergyConsumption`. Lagged variants use a time-based train/test split to avoid look-ahead leakage. They are trained side-by-side with the baseline as a benchmark; the `/predict` endpoint always uses the baseline so single-shot calls (which have no history context) don't degrade.
@@ -391,7 +403,11 @@ The platform answers three distinct questions about model quality, each with a d
 
 ### Layer 1 — Training-time metrics
 
-`python -m ml.training.train_models` writes [ml/models/trained/metrics.json](ml/models/trained/metrics.json) containing per-model RMSE, MAE, R², MAPE, and Accuracy (= 100% − MAPE). Random Forest and Gradient Boosting are each trained twice — baseline (no lag features) and lagged — so the impact of lag features is visible side-by-side. The LSTM section also re-evaluates on the original kWh scale so MAPE is comparable across models.
+[ml/models/trained/metrics.json](ml/models/trained/metrics.json) holds per-model RMSE, MAE, R², MAPE, and Accuracy (= 100% − MAPE). Random Forest and Gradient Boosting are each trained twice — baseline (no lag features) and lagged — so the impact of lag features is visible side-by-side. The LSTM entry is the **multivariate estimator** (`lstm_multivariate`, task `estimation`, R² ≈ 0.59), scored on its hold-out split in kWh so it's comparable to the regressors.
+
+> Generate it with `python -m ml.evaluation.regenerate_metrics`, which **re-scores the already-saved models without retraining** — so the numbers match the artifacts you ship. (`train_models` also writes metrics while training, but running it for a subset overwrites the file; the regenerate script rebuilds the complete set.)
+
+> **Accuracy caveat:** the target is tight (mean 77, std 8 kWh), so "Accuracy = 100 − MAPE" reads high for everything — a mean-only predictor already scores ~91%. **R² is the honest discriminator** (~0.54 RF, ~0.59 multivariate LSTM); it's capped near ~0.55 by the data (Temperature alone explains most of the signal, the rest is noise).
 
 ### Layer 2 — Cross-validation & evaluation
 
