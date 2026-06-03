@@ -40,7 +40,16 @@
       "Bash(sed -n '1p' \"src/app/\\(app\\)/analytics/page.tsx\")",
       "Bash(sed -n '1p' \"src/app/\\(app\\)/anomalies/page.tsx\")",
       "Bash(sed -n '552p' \"src/app/\\(app\\)/page.tsx\")",
-      "Bash(./venv/Scripts/python.exe -c \"import json,glob; [print\\(f'OK  {p}'\\) for p in glob.glob\\('ml/models/trained/*.json'\\) if \\(json.load\\(open\\(p\\)\\) or True\\)]\")"
+      "Bash(./venv/Scripts/python.exe -c \"import json,glob; [print\\(f'OK  {p}'\\) for p in glob.glob\\('ml/models/trained/*.json'\\) if \\(json.load\\(open\\(p\\)\\) or True\\)]\")",
+      "Bash(./venv/Scripts/python.exe -c ' *)",
+      "Bash(./venv/Scripts/python.exe -m ml.evaluation.regenerate_metrics)",
+      "Bash(awk '{print $5, $9}')",
+      "Bash(./venv/Scripts/python.exe -c *)",
+      "Bash(./venv/Scripts/python.exe -m ml.training.train_lstm_multivariate)",
+      "Bash(./venv/Scripts/python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8011 --log-level warning)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8011/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8011/api/docs)",
+      "Bash(npx eslint *)"
     ]
   }
 }
