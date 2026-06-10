@@ -24,3 +24,12 @@ export async function deleteAlert(id: number) {
   revalidatePath("/alerts")
   return { ok: true }
 }
+
+export async function sendTestEmail() {
+  const res = await backendFetch<{ sent: boolean; to: string }>("/alerts/test-email", {
+    method: "POST",
+    body: JSON.stringify({}),
+  })
+  if (res.error) return { ok: false as const, error: res.error }
+  return { ok: true as const, to: res.data?.to }
+}

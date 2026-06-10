@@ -1,6 +1,7 @@
 """
 Email notification service
 """
+import logging
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -8,10 +9,12 @@ from email.mime.multipart import MIMEMultipart
 from typing import Optional
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 
 class EmailService:
     """Email notification service using SMTP"""
-    
+
     def __init__(self):
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
@@ -19,9 +22,13 @@ class EmailService:
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")
         self.from_email = os.getenv("FROM_EMAIL", self.smtp_username)
         self.from_name = os.getenv("FROM_NAME", "EnerSight Alerts")
-        
+
         # Check if email is configured
         self.is_configured = bool(self.smtp_username and self.smtp_password)
+        if not self.is_configured:
+            logger.warning(
+                "Email alerts disabled: SMTP_USERNAME and SMTP_PASSWORD are not set in .env"
+            )
     
     def send_email(
         self,
@@ -43,8 +50,10 @@ class EmailService:
             True if email sent successfully, False otherwise
         """
         if not self.is_configured:
-            print("⚠️  Email not configured. Set SMTP_USERNAME and SMTP_PASSWORD in .env")
-            print(f"📧 Would send email to {to_email}: {subject}")
+            logger.warning(
+                "Email not configured (SMTP_USERNAME/SMTP_PASSWORD missing) — "
+                f"dropped email to {to_email}: {subject}"
+            )
             return False
         
         try:
@@ -69,11 +78,11 @@ class EmailService:
                 server.login(self.smtp_username, self.smtp_password)
                 server.send_message(msg)
             
-            print(f"✅ Email sent to {to_email}: {subject}")
+            logger.info(f"Email sent to {to_email}: {subject}")
             return True
-            
+
         except Exception as e:
-            print(f"❌ Failed to send email to {to_email}: {str(e)}")
+            logger.error(f"Failed to send email to {to_email}: {e}")
             return False
     
     def send_threshold_alert(
@@ -167,6 +176,61 @@ EnerSight Team
         
         return self.send_email(to_email, subject, body_text, body_html)
     
+    def send_test_email(self, to_email: str, username: str) -> bool:
+        """Send an on-demand test email to verify the notification pipeline."""
+        subject = "✉️ EnerSight Test Email"
+        sent_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+        body_text = f"""
+Hello {username},
+
+This is a test email from EnerSight, sent on demand from the dashboard.
+
+If you are reading this, email notifications are working correctly.
+
+Sent at: {sent_at}
+
+Best regards,
+EnerSight Team
+        """.strip()
+
+        body_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
+        .content {{ background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-top: none; }}
+        .ok-box {{ background: #ecfdf5; border: 1px solid #10b981; padding: 15px; border-radius: 5px; margin: 15px 0; }}
+        .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #666; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 style="margin: 0;">✉️ Test Email</h2>
+            <p style="margin: 5px 0 0 0;">Notification pipeline check</p>
+        </div>
+        <div class="content">
+            <p>Hello <strong>{username}</strong>,</p>
+            <div class="ok-box">
+                <strong>✅ Email notifications are working correctly.</strong>
+            </div>
+            <p>This test email was sent on demand from the EnerSight dashboard.</p>
+            <p><strong>Sent at:</strong> {sent_at}</p>
+        </div>
+        <div class="footer">
+            <p>This is a test message from EnerSight Energy Monitoring System.</p>
+        </div>
+    </div>
+</body>
+</html>
+        """.strip()
+
+        return self.send_email(to_email, subject, body_text, body_html)
+
     def send_anomaly_alert(
         self,
         to_email: str,

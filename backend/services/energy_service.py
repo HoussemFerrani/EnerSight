@@ -27,6 +27,30 @@ from backend.core.exceptions import (
 logger = get_logger(__name__)
 
 
+def build_anomaly_features(data: List[Dict[str, Any]]):
+    """
+    Map raw reading dicts (with a "time" key) to the feature frame the trained
+    Isolation Forest expects. Shared by the API path and the alert monitor —
+    keep in sync with the columns used at training time.
+    """
+    import pandas as pd
+
+    df = pd.DataFrame(data)
+    ts = pd.to_datetime(df["time"]) if "time" in df.columns else None
+    return pd.DataFrame({
+        "EnergyConsumption": df.get("consumption", 0.0),
+        "Temperature":       df.get("temperature", 0.0),
+        "Humidity":          df.get("humidity", 0.0),
+        "Occupancy":         df["occupancy"].fillna(0) if "occupancy" in df.columns else 0,
+        "HVACUsage_On":      df["hvac_usage"].fillna(False).astype(int) if "hvac_usage" in df.columns else 0,
+        "LightingUsage_On":  df["lighting_usage"].fillna(False).astype(int) if "lighting_usage" in df.columns else 0,
+        "Holiday_Yes":       df["holiday"].fillna(False).astype(int) if "holiday" in df.columns else 0,
+        "RenewableEnergy":   df["renewable_energy"].fillna(0.0) if "renewable_energy" in df.columns else 0.0,
+        "Hour":              ts.dt.hour if ts is not None else 12,
+        "DayOfWeek_Num":     ts.dt.dayofweek if ts is not None else 0,
+    })
+
+
 class EnergyService:
     """
     Service for energy consumption business logic
@@ -381,25 +405,10 @@ class EnergyService:
         if not data:
             return []
 
-        import pandas as pd
-        df = pd.DataFrame(data)
-
         # Map DB column names to the names the trained Isolation Forest expects.
         # Without this the wrapper fills every feature with zeros and every row
         # gets an identical anomaly score.
-        ts = pd.to_datetime(df["time"]) if "time" in df.columns else None
-        feature_df = pd.DataFrame({
-            "EnergyConsumption": df.get("consumption", 0.0),
-            "Temperature":       df.get("temperature", 0.0),
-            "Humidity":          df.get("humidity", 0.0),
-            "Occupancy":         df["occupancy"].fillna(0) if "occupancy" in df.columns else 0,
-            "HVACUsage_On":      df["hvac_usage"].fillna(False).astype(int) if "hvac_usage" in df.columns else 0,
-            "LightingUsage_On":  df["lighting_usage"].fillna(False).astype(int) if "lighting_usage" in df.columns else 0,
-            "Holiday_Yes":       df["holiday"].fillna(False).astype(int) if "holiday" in df.columns else 0,
-            "RenewableEnergy":   df["renewable_energy"].fillna(0.0) if "renewable_energy" in df.columns else 0.0,
-            "Hour":              ts.dt.hour if ts is not None else 12,
-            "DayOfWeek_Num":     ts.dt.dayofweek if ts is not None else 0,
-        })
+        feature_df = build_anomaly_features(data)
 
         predictions, scores = self.anomaly_detector.detect(feature_df)
         

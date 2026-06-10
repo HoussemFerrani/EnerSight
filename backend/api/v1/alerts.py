@@ -95,6 +95,37 @@ async def get_alert_summary(
     )
 
 
+@router.post("/test-email")
+async def send_test_email(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Send an on-demand test email to the current user's address."""
+    from sqlalchemy import text as sql_text
+    from backend.services.email_service import email_service
+
+    if not email_service.is_configured:
+        raise HTTPException(
+            status_code=503,
+            detail="Email is not configured (SMTP_USERNAME/SMTP_PASSWORD missing)"
+        )
+
+    # Email lives in auth.users (Supabase) — fetch it via raw SQL.
+    row = db.execute(
+        sql_text("select email from auth.users where id = :uid"),
+        {"uid": str(current_user.id)},
+    ).first()
+    email = row[0] if row else None
+    if not email:
+        raise HTTPException(status_code=404, detail="No email address found for this account")
+
+    sent = email_service.send_test_email(to_email=email, username=str(current_user.username))
+    if not sent:
+        raise HTTPException(status_code=502, detail="SMTP send failed — check backend logs")
+
+    return {"sent": True, "to": email}
+
+
 @router.get("/{alert_id}", response_model=AlertResponse)
 async def get_alert(
     alert_id: int,

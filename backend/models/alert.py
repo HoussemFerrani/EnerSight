@@ -39,10 +39,23 @@ class Alert(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    # Alert details
-    alert_type = Column(Enum(AlertType), nullable=False)
-    severity = Column(Enum(AlertSeverity), default=AlertSeverity.WARNING, nullable=False)
-    status = Column(Enum(AlertStatus), default=AlertStatus.PENDING, nullable=False)
+    # Alert details. The DB check constraints expect the lowercase enum VALUES
+    # ('threshold_exceeded', ...), but SQLAlchemy's Enum persists member NAMES
+    # by default — values_callable makes it persist the values instead.
+    alert_type = Column(
+        Enum(AlertType, values_callable=lambda e: [m.value for m in e], native_enum=False),
+        nullable=False,
+    )
+    severity = Column(
+        Enum(AlertSeverity, values_callable=lambda e: [m.value for m in e], native_enum=False),
+        default=AlertSeverity.WARNING,
+        nullable=False,
+    )
+    status = Column(
+        Enum(AlertStatus, values_callable=lambda e: [m.value for m in e], native_enum=False),
+        default=AlertStatus.PENDING,
+        nullable=False,
+    )
     
     # Message details
     title = Column(String(200), nullable=False)

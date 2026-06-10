@@ -1,4 +1,4 @@
-"""
+﻿"""
 FastAPI Main Application - Clean Architecture
 Entry point for the EnerSight API server
 
@@ -14,6 +14,12 @@ Implements:
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Load .env into os.environ before any backend module is imported — services
+# like email_service and reading_simulator read config via os.getenv, which
+# pydantic-settings does NOT populate.
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -90,9 +96,9 @@ async def lifespan(app: FastAPI):
         try:
             from backend.database.postgres import init_db
             init_db()
-            logger.info("✓ PostgreSQL database initialized")
+            logger.info("[OK] PostgreSQL database initialized")
         except Exception as db_error:
-            logger.warning(f"⚠ PostgreSQL initialization skipped: {db_error}")
+            logger.warning(f"[WARN] PostgreSQL initialization skipped: {db_error}")
         
         # Start alert monitoring service
         try:
@@ -100,11 +106,31 @@ async def lifespan(app: FastAPI):
             import asyncio
             monitor_task = asyncio.create_task(alert_monitor.start())
             background_tasks.append(monitor_task)
-            logger.info("✓ Alert monitoring service started")
+            logger.info("[OK] Alert monitoring service started")
         except Exception as alert_error:
-            logger.warning(f"⚠ Alert monitoring service failed to start: {alert_error}")
+            logger.warning(f"[WARN] Alert monitoring service failed to start: {alert_error}")
+
+        # Start reading simulator (no real sensors — replays the dataset as live data)
+        try:
+            from backend.services.reading_simulator import reading_simulator
+            import asyncio
+            simulator_task = asyncio.create_task(reading_simulator.start())
+            background_tasks.append(simulator_task)
+            logger.info("[OK] Reading simulator started")
+        except Exception as sim_error:
+            logger.warning(f"[WARN] Reading simulator failed to start: {sim_error}")
+
+        # Start MQTT ingestor (consumes sensor messages into energy_readings)
+        try:
+            from backend.services.mqtt_ingestor import mqtt_ingestor
+            import asyncio
+            mqtt_task = asyncio.create_task(mqtt_ingestor.start())
+            background_tasks.append(mqtt_task)
+            logger.info("[OK] MQTT ingestor started")
+        except Exception as mqtt_error:
+            logger.warning(f"[WARN] MQTT ingestor failed to start: {mqtt_error}")
         
-        logger.info("✓ Application started successfully")
+        logger.info("[OK] Application started successfully")
     except Exception as e:
         logger.critical(f"Failed to start application: {e}", exc_info=True)
         raise
@@ -114,9 +140,13 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down application...")
     try:
-        # Stop alert monitoring
+        # Stop alert monitoring, the reading simulator, and the MQTT ingestor
         from backend.services.alert_monitor import alert_monitor
+        from backend.services.reading_simulator import reading_simulator
+        from backend.services.mqtt_ingestor import mqtt_ingestor
         alert_monitor.stop()
+        reading_simulator.stop()
+        mqtt_ingestor.stop()
         
         # Cancel background tasks
         for task in background_tasks:
@@ -127,7 +157,7 @@ async def lifespan(app: FastAPI):
                 pass
         
         await cleanup_dependencies()
-        logger.info("✓ Application shut down cleanly")
+        logger.info("[OK] Application shut down cleanly")
     except Exception as e:
         logger.error(f"Error during shutdown: {e}", exc_info=True)
 

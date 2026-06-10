@@ -14,6 +14,7 @@ import {
 import { backendFetch } from "@/lib/api/backend"
 
 import { AlertRowActions } from "./row-actions"
+import { TestEmailButton } from "./test-email-button"
 
 type AlertRecord = {
   id: number
@@ -52,11 +53,14 @@ export default async function AlertsPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Alerts</h1>
-        <p className="text-sm text-muted-foreground">
-          Notifications when consumption breaks your thresholds.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Alerts</h1>
+          <p className="text-sm text-muted-foreground">
+            Notifications when consumption breaks your thresholds.
+          </p>
+        </div>
+        <TestEmailButton />
       </header>
 
       {err && (

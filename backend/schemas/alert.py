@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 
 
 class AlertTypeEnum(str, Enum):
@@ -65,7 +66,7 @@ class AlertUpdate(BaseModel):
 class AlertResponse(BaseModel):
     """Schema for alert response. user_id is a Supabase auth.users UUID."""
     id: int
-    user_id: str
+    user_id: UUID
     alert_type: str
     severity: str
     status: str
