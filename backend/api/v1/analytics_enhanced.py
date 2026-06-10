@@ -117,6 +117,23 @@ async def compare_periods(
         raise HTTPException(status_code=500, detail=f"Failed to compare periods: {str(e)}")
 
 
+@router.get("/breakdown")
+async def get_breakdowns(
+    start_date: datetime = Query(...),
+    end_date: datetime = Query(...),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Multi-dimensional breakdowns for the analytics dashboard: hourly/weekday
+    profiles, temperature scatter, equipment impact, occupancy, renewables,
+    and the consumption distribution.
+    """
+    try:
+        return analytics_service.get_breakdowns(start_date=start_date, end_date=end_date)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to compute breakdowns: {str(e)}")
+
+
 @router.get("/export/csv")
 async def export_to_csv(
     start_date: datetime = Query(...),

@@ -220,6 +220,148 @@ class AnalyticsService:
             comparison_type=comparison_type,
         )
 
+    def get_breakdowns(self, start_date: datetime, end_date: datetime) -> dict:
+        """
+        Multi-dimensional breakdowns for the analytics dashboard, computed in
+        one pass over the period: time-of-day/weekday profiles, weather and
+        occupancy correlations, equipment impact, renewables, and the
+        consumption distribution.
+        """
+        in_range = lambda q: q.filter(  # noqa: E731
+            EnergyReading.recorded_at >= start_date,
+            EnergyReading.recorded_at < end_date,
+        )
+
+        with SessionLocal() as session:
+            # Average consumption by hour of day (0-23)
+            hour = func.extract("hour", EnergyReading.recorded_at).label("hour")
+            hourly = in_range(
+                session.query(
+                    hour,
+                    func.avg(EnergyReading.consumption).label("avg"),
+                    func.max(EnergyReading.consumption).label("max"),
+                    func.count(EnergyReading.id).label("count"),
+                )
+            ).group_by(hour).order_by(hour.asc()).all()
+
+            # Average consumption by ISO weekday (1=Mon .. 7=Sun)
+            dow = func.extract("isodow", EnergyReading.recorded_at).label("dow")
+            weekdays = in_range(
+                session.query(
+                    dow,
+                    func.avg(EnergyReading.consumption).label("avg"),
+                    func.count(EnergyReading.id).label("count"),
+                )
+            ).group_by(dow).order_by(dow.asc()).all()
+
+            # Temperature vs consumption sample for the scatter plot
+            scatter = in_range(
+                session.query(
+                    EnergyReading.temperature,
+                    EnergyReading.consumption,
+                    EnergyReading.hvac_usage,
+                )
+                .filter(EnergyReading.temperature.isnot(None))
+            ).order_by(func.random()).limit(400).all()
+
+            # Equipment / context impact: avg consumption per on/off state
+            def _flag_avgs(column):
+                rows = in_range(
+                    session.query(
+                        column,
+                        func.avg(EnergyReading.consumption).label("avg"),
+                        func.count(EnergyReading.id).label("count"),
+                    )
+                ).group_by(column).all()
+                out = {"on": None, "off": None}
+                for r in rows:
+                    out["on" if r[0] else "off"] = round(float(r.avg or 0.0), 2)
+                return out
+
+            factors = {
+                "hvac": _flag_avgs(EnergyReading.hvac_usage),
+                "lighting": _flag_avgs(EnergyReading.lighting_usage),
+                "holiday": _flag_avgs(EnergyReading.holiday),
+            }
+
+            # Average consumption by occupancy level
+            occupancy = in_range(
+                session.query(
+                    EnergyReading.occupancy,
+                    func.avg(EnergyReading.consumption).label("avg"),
+                    func.count(EnergyReading.id).label("count"),
+                )
+                .filter(EnergyReading.occupancy.isnot(None))
+            ).group_by(EnergyReading.occupancy).order_by(EnergyReading.occupancy.asc()).all()
+
+            # Consumption vs renewable generation over time. Bucket by hour for
+            # short ranges, by day otherwise.
+            trunc = "hour" if (end_date - start_date) <= timedelta(days=3) else "day"
+            bucket = func.date_trunc(trunc, EnergyReading.recorded_at).label("bucket")
+            renewables = in_range(
+                session.query(
+                    bucket,
+                    func.sum(EnergyReading.consumption).label("consumption"),
+                    func.sum(func.coalesce(EnergyReading.renewable_energy, 0.0)).label("renewable"),
+                )
+            ).group_by(bucket).order_by(bucket.asc()).all()
+
+            # Histogram of reading values (12 equal-width bins)
+            bounds = in_range(
+                session.query(
+                    func.min(EnergyReading.consumption),
+                    func.max(EnergyReading.consumption),
+                )
+            ).first()
+            distribution = []
+            if bounds and bounds[0] is not None and bounds[1] is not None and bounds[1] > bounds[0]:
+                lo, hi, bins = float(bounds[0]), float(bounds[1]), 12
+                bin_expr = func.width_bucket(EnergyReading.consumption, lo, hi, bins).label("bin")
+                rows = in_range(
+                    session.query(bin_expr, func.count(EnergyReading.id).label("count"))
+                ).group_by(bin_expr).order_by(bin_expr.asc()).all()
+                counts = {int(r.bin): int(r.count) for r in rows}
+                width = (hi - lo) / bins
+                distribution = [
+                    {
+                        "range_start": round(lo + (b - 1) * width, 1),
+                        "range_end": round(lo + b * width, 1),
+                        # width_bucket puts the max value in bin n+1 — fold it in
+                        "count": counts.get(b, 0) + (counts.get(bins + 1, 0) if b == bins else 0),
+                    }
+                    for b in range(1, bins + 1)
+                ]
+
+        return {
+            "hourly_profile": [
+                {"hour": int(r.hour), "average": round(float(r.avg or 0.0), 2),
+                 "max": round(float(r.max or 0.0), 2), "count": int(r.count)}
+                for r in hourly
+            ],
+            "weekday_profile": [
+                {"weekday": int(r.dow), "average": round(float(r.avg or 0.0), 2), "count": int(r.count)}
+                for r in weekdays
+            ],
+            "temperature_scatter": [
+                {"temperature": round(float(r.temperature), 1),
+                 "consumption": round(float(r.consumption), 2),
+                 "hvac": bool(r.hvac_usage)}
+                for r in scatter
+            ],
+            "factors": factors,
+            "occupancy_profile": [
+                {"occupancy": int(r.occupancy), "average": round(float(r.avg or 0.0), 2), "count": int(r.count)}
+                for r in occupancy
+            ],
+            "renewable_timeseries": [
+                {"timestamp": r.bucket.isoformat(),
+                 "consumption": round(float(r.consumption or 0.0), 2),
+                 "renewable": round(float(r.renewable or 0.0), 2)}
+                for r in renewables
+            ],
+            "distribution": distribution,
+        }
+
     def export_to_csv(
         self,
         start_date: datetime,

@@ -19,14 +19,11 @@ export type PredictionResult = {
   features: Record<string, unknown>
 }
 
-export type PredictionModel = "rf" | "lstm"
-
 export async function predict(
   input: PredictionInput,
-  model: PredictionModel = "rf",
 ): Promise<{ ok: true; result: PredictionResult } | { ok: false; error: string }> {
   const { data, error } = await backendFetch<PredictionResult>(
-    `/predictions/predict?model=${model}`,
+    "/predictions/predict",
     {
       method: "POST",
       body: JSON.stringify(input),

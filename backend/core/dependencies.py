@@ -34,8 +34,10 @@ class DatabaseManager:
         try:
             url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
             # Supabase's transaction pooler (pgbouncer) does NOT support prepared statements.
-            # asyncpg caches them by default — disable the cache and prepared-statement
-            # creation to avoid "prepared statement does not exist" errors.
+            # asyncpg caches them by default — disable the cache AND give every statement a
+            # unique name; with a shared pooler, reused default names ("__asyncpg_stmt_N__")
+            # collide across connections and raise DuplicatePreparedStatementError.
+            import uuid as _uuid
             self._postgres_engine = create_async_engine(
                 url,
                 pool_size=settings.db_pool_size,
@@ -45,6 +47,7 @@ class DatabaseManager:
                 connect_args={
                     "statement_cache_size": 0,
                     "prepared_statement_cache_size": 0,
+                    "prepared_statement_name_func": lambda: f"__asyncpg_{_uuid.uuid4()}__",
                 },
             )
             self._postgres_session_factory = async_sessionmaker(
