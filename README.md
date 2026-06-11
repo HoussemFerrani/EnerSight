@@ -51,26 +51,35 @@ EnerSight monitors, analyzes, and optimizes building energy consumption using Io
 
 ```
 EnerSight/
-├── backend/                # FastAPI application
-│   ├── api/                # REST + WebSocket routes
-│   ├── core/               # Config, DI, logging, errors
-│   ├── database/           # Supabase Postgres engine
+├── backend/                # FastAPI application (serving layer)
+│   ├── api/                # REST + WebSocket routes (v1 + legacy routes)
+│   ├── core/               # Config, DI container, logging, error handlers
+│   ├── database/           # Supabase Postgres engine + sessions
+│   ├── migrations/         # SQL migrations
+│   ├── ml/                 # Model loaders + inference wrappers (serving side)
 │   ├── models/             # SQLAlchemy ORM models
 │   ├── repositories/       # Data access layer
-│   ├── schemas/            # Pydantic schemas
-│   ├── services/           # Business logic
-│   ├── scripts/            # Data loader
-│   └── utils/              # JWT verification, helpers
-├── frontend/               # Next.js (App Router) app
-│   ├── src/
-│   │   ├── app/            # Routes: login, (app)/{dashboard,analytics,alerts,...}
-│   │   ├── components/     # Shared UI
-│   │   └── lib/            # supabase client/server, api/backend.ts, utils
-├── ml/                     # ML models
-│   ├── models/             # Regression / LSTM / Anomaly classes
+│   ├── schemas/            # Pydantic request/response schemas
+│   ├── services/           # Business logic: alerts, email, analytics,
+│   │                       #   energy, MQTT ingestor, reading simulator
+│   ├── scripts/            # One-off data loader (CSV → Supabase)
+│   └── utils/              # JWT verification helpers
+├── frontend/               # Next.js 16 (App Router) app
+│   └── src/
+│       ├── app/            # Routes: login, (app)/{dashboard,analytics,alerts,
+│       │                   #   anomalies,predictions,realtime,reports,...}
+│       ├── components/     # Shared UI (shadcn/ui based)
+│       └── lib/            # supabase client/server, api/backend.ts, utils
+├── ml/                     # ML lab (training side)
+│   ├── models/             # Regression / LSTM / Anomaly model classes
+│   ├── preprocessing/      # Cleaning + feature engineering
 │   ├── training/           # Training pipelines (+ TFLite export, benchmark)
-│   └── evaluation/         # K-fold CV + anomaly P/R evaluation script
-├── data/raw/               # Source CSV(s) (ignored by git)
+│   ├── evaluation/         # K-fold CV + metrics regeneration
+│   └── models/trained/     # Saved artifacts (.joblib / .keras) + metrics.json
+├── data/                   # Source + processed CSVs
+├── docs/                   # Setup, deployment, architecture docs (legacy/ = historical)
+├── scripts/                # MQTT sensor simulator, dependency checker
+├── tests/                  # Pytest: unit + integration
 ├── render.yaml             # Render deployment (backend only)
 ├── start.ps1               # One-shot local launcher (Windows)
 └── requirements.txt
@@ -85,7 +94,7 @@ EnerSight/
 
 ### 1. Set up Supabase
 1. Create a project.
-2. Open the SQL editor and run the migration from your local Supabase MCP, or apply the schema documented in `DEPLOYMENT.md`.
+2. Open the SQL editor and run the migration from your local Supabase MCP, or apply the schema documented in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 3. From **Project Settings → API**, copy:
    - Project URL
    - `anon` / publishable key
@@ -480,7 +489,7 @@ Result: Supabase's `rls_disabled_in_public` advisory drops from 12× **ERROR** t
 
 The backend deploys to Render via [render.yaml](render.yaml) on the native Python runtime — no Docker. The frontend (Next.js) deploys to Vercel with `npm run build`.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the full guide.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full guide.
 
 ## Development
 

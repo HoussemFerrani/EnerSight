@@ -87,7 +87,24 @@
       "PowerShell(Select-String -Path \"C:\\\\Users\\\\merie\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-merie-OneDrive-Desktop-EnerSight\\\\e7e186d9-b6cf-4efe-a725-78aad39a0f75\\\\tasks\\\\bzve2femk.output\" -Pattern 'ERROR|error|Prediction' | Select-Object -Last 8 -ExpandProperty Line; $body = '{\"temperature\": 24.5, \"humidity\": 50, \"occupancy\": 4, \"hvac_usage\": 10, \"lighting_usage\": 3, \"equipment_usage\": 8, \"renewable_energy\": 5}'; $r = Invoke-RestMethod -Uri 'http://localhost:8000/api/v1/predictions/predict' -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 60; \"retry predict: $\\($r.predicted_consumption\\) kWh via '$\\($r.model\\)'\")",
       "PowerShell($deadline = \\(Get-Date\\).AddSeconds\\(90\\); $ok = $false; while \\(\\(Get-Date\\) -lt $deadline\\) { try { Invoke-RestMethod -Uri 'http://localhost:8000/health' -TimeoutSec 3 | Out-Null; $ok = $true; break } catch { Start-Sleep -Seconds 3 } }; \"backend: $\\(if \\($ok\\) {'healthy'} else {'not ready'}\\)\"; $body = '{\"temperature\": 24.5, \"humidity\": 50, \"occupancy\": 4, \"hvac_usage\": 10, \"lighting_usage\": 3, \"equipment_usage\": 8, \"renewable_energy\": 5}'; foreach \\($i in 1..3\\) { try { $r = Invoke-RestMethod -Uri 'http://localhost:8000/api/v1/predictions/predict' -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 60; \"call ${i}: $\\([math]::Round\\($r.predicted_consumption, 2\\)\\) kWh via '$\\($r.model\\)' \\(confidence $\\($r.confidence\\)\\)\" } catch { \"call ${i}: FAILED $\\($_.Exception.Message\\)\" } })",
       "PowerShell($conns = Get-NetTCPConnection -LocalPort 8000,3000 -State Listen -ErrorAction SilentlyContinue | Select-Object LocalPort, OwningProcess -Unique; if \\($conns\\) { $conns | ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; \"port $\\($_.LocalPort\\): PID $\\($_.OwningProcess\\) \\($\\($p.ProcessName\\)\\)\" } } else { 'nothing listening' })",
-      "PowerShell(Stop-Process -Id 15208, 16444 -Force -Confirm:$false; Start-Sleep -Seconds 2; $left = Get-NetTCPConnection -LocalPort 8000,3000 -State Listen -ErrorAction SilentlyContinue; if \\($left\\) { 'still listening: ' + \\(\\($left.LocalPort | Select-Object -Unique\\) -join ', '\\) } else { 'both servers stopped' })"
+      "PowerShell(Stop-Process -Id 15208, 16444 -Force -Confirm:$false; Start-Sleep -Seconds 2; $left = Get-NetTCPConnection -LocalPort 8000,3000 -State Listen -ErrorAction SilentlyContinue; if \\($left\\) { 'still listening: ' + \\(\\($left.LocalPort | Select-Object -Unique\\) -join ', '\\) } else { 'both servers stopped' })",
+      "PowerShell(Get-ChildItem -Force | Where-Object { $_.Name -notin '.git','venv','node_modules' } | Select-Object Name, @{N='Type';E={if \\($_.PSIsContainer\\) {'dir'} else {'file'}}} | Format-Table -AutoSize)",
+      "PowerShell('--- backend ---')",
+      "PowerShell('--- ml ---')",
+      "PowerShell('--- frontend/src ---')",
+      "PowerShell('--- docs? ---')",
+      "PowerShell('--- docs/ ---'; Get-ChildItem docs -Recurse -File | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\(\\(Get-Location\\).Path + '\\\\', ''\\) }; '--- tests/ ---'; Get-ChildItem tests -Recurse -File | Select-Object -First 15 | ForEach-Object { $_.FullName.Replace\\(\\(Get-Location\\).Path + '\\\\', ''\\) }; '--- scripts/ ---'; Get-ChildItem scripts | Select-Object -ExpandProperty Name; '--- backend/scripts ---'; Get-ChildItem backend\\\\scripts | Select-Object -ExpandProperty Name; '--- backend/utils ---'; Get-ChildItem backend\\\\utils | Select-Object -ExpandProperty Name; '--- data/ ---'; Get-ChildItem data -Recurse -File | Select-Object -First 10 | ForEach-Object { $_.FullName.Replace\\(\\(Get-Location\\).Path + '\\\\', ''\\) })",
+      "PowerShell(foreach \\($f in 'docs\\\\PROJECT_STRUCTURE.md','docs\\\\ARCHITECTURE_SUMMARY.md','docs\\\\SETUP_GUIDE.md','docs\\\\ARCHITECTURE_DECISIONS.md','docs\\\\BEST_PRACTICES.md'\\) { \"===== $f =====\"; Get-Content $f -TotalCount 12 })",
+      "PowerShell('--- README structure section ---')",
+      "PowerShell(New-Item -ItemType Directory -Force docs\\\\legacy)",
+      "PowerShell(git mv docs/PROJECT_STRUCTURE.md docs/legacy/PROJECT_STRUCTURE.md)",
+      "PowerShell(git mv docs/SETUP_GUIDE.md docs/legacy/SETUP_GUIDE.md)",
+      "PowerShell(git mv docs/ARCHITECTURE_SUMMARY.md docs/legacy/ARCHITECTURE_SUMMARY.md)",
+      "PowerShell(git mv SETUP.md docs/SETUP.md)",
+      "PowerShell(git mv DEPLOYMENT.md docs/DEPLOYMENT.md)",
+      "PowerShell(git mv PROJECT_OVERVIEW.md docs/PROJECT_OVERVIEW.md)",
+      "PowerShell(git mv verify_deps.py scripts/verify_deps.py)",
+      "PowerShell(Get-ChildItem -Recurse -Directory -Filter '__pycache__' | Where-Object { $_.FullName -notmatch 'venv|node_modules' } | Remove-Item -Recurse -Force -Confirm:$false; 'pycache cleaned')"
     ]
   }
 }
