@@ -137,7 +137,7 @@ class EnergyService:
         
         # Use current time if not provided
         if timestamp is None:
-            timestamp = datetime.utcnow()
+            timestamp = datetime.now(timezone.utc)
         
         # Prepare data for storage
         tags = {

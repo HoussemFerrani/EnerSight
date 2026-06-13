@@ -136,7 +136,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
             Consumption patterns, drivers, costs, and trends over time.
           </p>
         </div>
-        <PeriodSelector period={period} rate={rate} />
+        <PeriodSelector period={period} />
       </header>
 
       {err && (

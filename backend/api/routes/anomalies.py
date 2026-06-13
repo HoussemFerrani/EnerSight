@@ -5,7 +5,7 @@ Endpoints for detecting unusual energy consumption patterns
 
 from fastapi import APIRouter, HTTPException, Depends, Query, status
 from typing import List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from backend.api.models.anomalies import AnomalyDetectionResponse
 from backend.services.energy_service import EnergyService
@@ -46,7 +46,7 @@ async def detect_anomalies(
     - Period analyzed
     """
     try:
-        end = datetime.utcnow()
+        end = datetime.now(timezone.utc)
         start = end - timedelta(hours=hours)
         
         anomalies = await service.detect_anomalies(start=start, end=end)
@@ -94,7 +94,7 @@ async def get_anomaly_history(
     - List of historical anomaly records
     """
     try:
-        end = datetime.utcnow()
+        end = datetime.now(timezone.utc)
         start = end - timedelta(days=days)
         
         anomalies = await service.detect_anomalies(start=start, end=end)

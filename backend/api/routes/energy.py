@@ -5,7 +5,7 @@ Endpoints for energy consumption data retrieval and management
 
 from fastapi import APIRouter, HTTPException, Depends, Query, status
 from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from backend.api.models.energy import (
     EnergyReadingCreate,
@@ -91,12 +91,12 @@ async def get_historical_readings(
         if start_date:
             start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
         else:
-            start = datetime.utcnow() - timedelta(hours=24)
+            start = datetime.now(timezone.utc) - timedelta(hours=24)
         
         if end_date:
             end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
         else:
-            end = datetime.utcnow()
+            end = datetime.now(timezone.utc)
         
         data = await service.get_consumption_history(
             start=start,
@@ -147,7 +147,7 @@ async def get_energy_statistics(
     """
     try:
         # Determine time range based on period
-        end = datetime.utcnow()
+        end = datetime.now(timezone.utc)
         
         if start_date and end_date:
             start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
